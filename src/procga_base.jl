@@ -24,13 +24,13 @@ end
 
 # make job time table base (ignoring sequence)
 function jobtablebase(ptable)
-    lp = sum(ptable)
     sz = size(ptable)
+    lp = prod(sz)
     
     tb = zeros(Int,sz[1],lp)
-    for k in 1:sz[1]
-        jl = joblist(ptable[k,:])
-        tb[k,1:length(jl)] = jl
+    for i in 1:sz[1]
+        jl = findall(ptable[i,:].>0)
+        tb[i,1:length(jl)] = jl
     end
     tb
 end
@@ -101,47 +101,53 @@ function checkvalidity(jtbl,gp,mt)
     flg = true
     k,ll = size(jtbl)
     for i in 1:ll
-        q = mt[1,2]
-        for j in 1:k
-            a = jtbl[j,i]
-            for m in (j+1):k
-                if jtbl[m,i] == a
-                    if isgroupable(a,gp)
-                        q += mt[m,2]
-                    else
+        if sum(jtbl[:,i]) > 0
+            q = mt[1,2]
+            for j in 1:k
+                a = jtbl[j,i]
+                if a > 0
+                    for m in (j+1):k
+                        if jtbl[m,i] == a
+                            if isgroupable(a,gp)
+                                q += mt[m,2]
+                            else
+                                flg = false
+                            end
+                        end
+                    end
+                    if isgroupable(a,gp) && q > groupcapacity(a,gp)
                         flg = false
                     end
                 end
-            end
-            if q > groupcapacity(a,gp)
-                flg = false
-            end
-            if flg == false
-                return(flg)
+                if flg == false
+                    return(flg)
+                end
             end
         end
     end
     return(flg)
 end
 
-function validatejob1(jtbl,gp,mt)
+function validatejob1!(jtbl,gp,mt)
     k,ll = size(jtbl)
     for i in 1:ll
-        q = mt[1,2]
-        for j in 1:k
-            a = jtbl[j,i]
-            for m in (j+1):k
-                if jtbl[m,i] == a
-                    if isgroupable(a,gp)
-                        q += mt[m,2]
-                        if q > groupcapacity(a,gp)
+        if sum(jtbl[:,i]) > 0
+            q = mt[1,2]
+            for j in 1:k
+                a = jtbl[j,i]
+                for m in (j+1):k
+                    if jtbl[m,i] == a
+                        if isgroupable(a,gp)
+                            q += mt[m,2]
+                            if q > groupcapacity(a,gp)
+                                jtbl[m,i:end] = circshift(jtbl[m,i:end],1)
+                                break
+                            end
+                        else
+                            # circular shift latter data
                             jtbl[m,i:end] = circshift(jtbl[m,i:end],1)
                             break
                         end
-                    else
-                        # circular shift latter data
-                        jtbl[m,i:end] = circshift(jtbl[m,i:end],1)
-                        break
                     end
                 end
             end
@@ -151,10 +157,10 @@ function validatejob1(jtbl,gp,mt)
 end
 
 # 
-function validatejob(jtbl,gp,mt,maxcount = 100)
+function validatejob!(jtbl,gp,mt,maxcount = 100)
     i = maxcount
-    while !checkvalidity(jtbl,gp,mt) | i > 0
-        jtbl = validatejob1(jtbl,gp,mt)
+    while !checkvalidity(jtbl,gp,mt) && i > 0
+        validatejob1!(jtbl,gp,mt)
         i -= 1
     end
     if i == 0
@@ -190,17 +196,23 @@ function shrinkjob1!(jtbl)
     return(flg)
 end
 
-function shrinkjob(jtbl)
+function shrinkjob!(jtbl)
     while true
         if !shrinkjob1!(jtbl)
             break
         end
     end
     jtbl
+end    
+
+function clipjob(jtbl)
+    m = validlength(jtbl)
+    jtbl[:,1:m]
 end
 
 # sort population table by its valid length
 function sortpopulation!(pptbl)
+    shrinkjob!.(pptbl)
     sort!(pptbl, by = x->validlength(x))
 end
 
@@ -224,7 +236,7 @@ end
 
 function mutatejob!(jtbl,rate = 0.05)
     if rand() < rate
-        m = ProcGA.validlength(jtbl)
+        m = validlength(jtbl)
         m1 = rand(1:m)
         m2 = rand(1:m)
         jtbl[:,m1], jtbl[:,m2] = jtbl[:,m2], jtbl[:,m1] 
@@ -254,16 +266,23 @@ function fillgeneration!(pptbl,n,elite = 0.2, mutant = 0.05)
 end
 
 # evolution
-function evolution!(pptbl, n, survival = 0.8, elite = 0.2, mutant = 0.05)
+# validatejob must be done before this
+function evolution!(pptbl, n, gp, mt, survival = 0.8, elite = 0.2, mutant = 0.05)
     rep = []
     s = length(pptbl)
     for i in 1:n
         survive!(pptbl,survival)
         fillgeneration!(pptbl,s,elite, mutant)
+        for i in 1:length(pptbl)
+            validatejob!(pptbl[i],gp,mt)
+        end
+        shrinkjob!.(pptbl)
         v = validlength.(pptbl)
         dt = (minimum(v),median(v),maximum(v))
         #println(dt)
         push!(rep,dt)
+#        pptbl = clipjoblength(pptbl,maximum(v))
     end
     rep
 end
+
