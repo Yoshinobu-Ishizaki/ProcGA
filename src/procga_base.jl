@@ -25,18 +25,19 @@ end
 # make job time table base (ignoring sequence)
 function jobtablebase(ptable)
     sz = size(ptable)
-    lp = prod(sz)
+    lp = sum(ptable)
     
     tb = zeros(Int,sz[1],lp)
     for i in 1:sz[1]
-        jl = findall(ptable[i,:].>0)
+        #jl = findall(ptable[i,:].>0)
+        jl = joblist(ptable[i,:])
         tb[i,1:length(jl)] = jl
     end
     tb
 end
 
 # make shuffled job table
-function jobtable(ptable)
+function jobtableshuffle(ptable)
     jtable=jobtablebase(ptable)
     for i in 1:size(jtable)[1]
         jtable[i,:] = shuffle(jtable[i,:])
@@ -45,7 +46,7 @@ function jobtable(ptable)
 end
 
 # sort job table in order while keeping position of 0 entity
-function possort!(jtbl)
+function orderjob!(jtbl)
     for i in 1:size(jtbl)[1]
         lst = jtbl[i,:]
         st = sort(lst[lst.>0]) # sorted value
@@ -59,20 +60,7 @@ function possort!(jtbl)
     jtbl
 end
 
-# create initial population of size n
-function initpopulation(n,ptable)
-    jt = jobtable(ptable)
-    popu = []
-    for i in 1:n
-        p = jobtable(ptable)
-        possort!(p)
-        push!(popu,p)
-    end
-    popu
-end
-
 # validation 
-
 # basically each job number appearing in same column must be exclusive except groupable items until amount of count is below limit.
 # sample: groupable = [Dict(:id =>[2,6], :cnt => 150)] # job 2,6 can be done simultaneously
 # this table must be given manually
@@ -153,11 +141,11 @@ function validatejob1!(jtbl,gp,mt)
             end
         end
     end
-    return(possort!(jtbl))
 end
 
 # 
 function validatejob!(jtbl,gp,mt,maxcount = 100)
+    orderjob!(jtbl)
     i = maxcount
     while !checkvalidity(jtbl,gp,mt) && i > 0
         validatejob1!(jtbl,gp,mt)
@@ -210,19 +198,6 @@ function clipjob(jtbl)
     jtbl[:,1:m]
 end
 
-# sort population table by its valid length
-function sortpopulation!(pptbl)
-    shrinkjob!.(pptbl)
-    sort!(pptbl, by = x->validlength(x))
-end
-
-# survival
-# inferior genes cannot live long
-function survive!(pptbl, survival = 0.8)
-    ll = Int(floor(length(pptbl) * survival))
-    splice!(pptbl,ll:length(pptbl))
-    pptbl
-end
 
 # crossover and mutation
 # crossover exchange rows of two genes at middle
@@ -242,6 +217,34 @@ function mutatejob!(jtbl,rate = 0.05)
         jtbl[:,m1], jtbl[:,m2] = jtbl[:,m2], jtbl[:,m1] 
     end
     return(jtbl)
+end
+
+# population 
+
+# create initial population of size n
+function initpopulation(n,ptable,gp,mt)
+    jt = jobtablebase(ptable)
+    validatejob!(jt,gp,mt)
+    popu = [copy(jt)] # adam
+    for i in 2:n
+        mutatejob!(jt,1) # make variation of base jobtable
+        push!(popu,copy(jt))
+    end
+    popu
+end
+
+# sort population table by its valid length
+function sortpopulation!(pptbl)
+    shrinkjob!.(pptbl)
+    sort!(pptbl, by = x->validlength(x))
+end
+
+# survival
+# inferior genes cannot live long
+function survive!(pptbl, survival = 0.8)
+    ll = Int(floor(length(pptbl) * survival))
+    splice!(pptbl,ll:length(pptbl))
+    pptbl
 end
 
 # fill up population using elite children and mutant genes
@@ -276,7 +279,6 @@ function evolution!(pptbl, n, gp, mt, survival = 0.8, elite = 0.2, mutant = 0.05
         for i in 1:length(pptbl)
             validatejob!(pptbl[i],gp,mt)
         end
-        shrinkjob!.(pptbl)
         v = validlength.(pptbl)
         dt = (minimum(v),median(v),maximum(v))
         #println(dt)
