@@ -7,8 +7,16 @@ using LinearAlgebra, Statistics
 using Random
 using DataFrames
 
+# globals
 # proctable has columns corresponding each process
 # rows correspond to each material objects
+# set common proc_table, group_table, mat_table
+function settable(ptbl, gtbl, mtbl)
+    global proctable = ptbl
+    global grouptable = gtbl
+    global mattable = mtbl
+    return(true)
+end
 
 # job table's columns are time units, therefore it is a schedule matrix
 # rows correspond to each material
@@ -35,6 +43,7 @@ function jobtablebase(ptable)
     end
     tb
 end
+jobtablebase() = jobtablebase(proctable)
 
 # make shuffled job table
 function jobtableshuffle(ptable)
@@ -44,6 +53,7 @@ function jobtableshuffle(ptable)
     end
     jtable
 end
+jobtableshuffle() = jobtableshuffle(proctable)
 
 # sort job table in order while keeping position of 0 entity
 function orderjob!(jtbl)
@@ -65,7 +75,8 @@ end
 # sample: groupable = [Dict(:id =>[2,6], :cnt => 150)] # job 2,6 can be done simultaneously
 # this table must be given manually
 
-function isgroupable(x, gp)
+function isgroupable(x)
+    gp = grouptable
     for i in 1:length(gp)
         if x in gp[i][:id]
             return(true)
@@ -75,7 +86,8 @@ function isgroupable(x, gp)
 end
 
 # return capacity of amount of max quantity in a group
-function groupcapacity(x,gp)
+function groupcapacity(x)
+    gp = grouptable
     for i in 1:length(gp)
         if x in gp[i][:id]
             return gp[i][:cnt]
@@ -85,7 +97,8 @@ function groupcapacity(x,gp)
 end
 
 # check if each column is valid combination of process
-function checkvalidity(jtbl,gp,mt)
+function checkvalidity(jtbl)
+    mt = mattable
     flg = true
     k,ll = size(jtbl)
     for i in 1:ll
@@ -96,14 +109,14 @@ function checkvalidity(jtbl,gp,mt)
                 if a > 0
                     for m in (j+1):k
                         if jtbl[m,i] == a
-                            if isgroupable(a,gp)
+                            if isgroupable(a)
                                 q += mt[m,2]
                             else
                                 flg = false
                             end
                         end
                     end
-                    if isgroupable(a,gp) && q > groupcapacity(a,gp)
+                    if isgroupable(a) && q > groupcapacity(a)
                         flg = false
                     end
                 end
@@ -116,7 +129,8 @@ function checkvalidity(jtbl,gp,mt)
     return(flg)
 end
 
-function validatejob1!(jtbl,gp,mt)
+function validatejob1!(jtbl)
+    mt = mattable
     k,ll = size(jtbl)
     for i in 1:ll
         if sum(jtbl[:,i]) > 0
@@ -125,9 +139,9 @@ function validatejob1!(jtbl,gp,mt)
                 a = jtbl[j,i]
                 for m in (j+1):k
                     if jtbl[m,i] == a
-                        if isgroupable(a,gp)
+                        if isgroupable(a)
                             q += mt[m,2]
-                            if q > groupcapacity(a,gp)
+                            if q > groupcapacity(a)
                                 jtbl[m,i:end] = circshift(jtbl[m,i:end],1)
                                 break
                             end
@@ -144,11 +158,11 @@ function validatejob1!(jtbl,gp,mt)
 end
 
 # 
-function validatejob!(jtbl,gp,mt,maxcount = 100)
+function validatejob!(jtbl,maxcount = 100)
     orderjob!(jtbl)
     i = maxcount
-    while !checkvalidity(jtbl,gp,mt) && i > 0
-        validatejob1!(jtbl,gp,mt)
+    while !checkvalidity(jtbl) && i > 0
+        validatejob1!(jtbl)
         i -= 1
     end
     if i == 0
@@ -169,6 +183,40 @@ function validlength(jtb)
         end
     end
     return(l)
+end
+
+# penalty to non-consecutive numbers!
+
+# check incontinuity of lst corresponding to process list plst
+function penalty0(lst,plst)
+    p = 0
+    e0 = 0 # element 
+    cm = 0
+    idx = findlast(x->(x>0),lst)
+    
+    for i in 1:idx
+        e1 = lst[i]
+        if e1 != e0
+            if e1 > 0 
+                e0 = e1
+                cm = plst[e0] - 1 # max time units for e0-th process
+            else
+                # add penalty because 0 occured between numbers, cm can be zero
+                p += cm
+            end
+        else 
+            cm -= 1
+        end
+    end # for
+    p 
+end
+
+function penalty(jtbl,ptable = proctable)
+    p = validlength(jtbl)
+    for i in 1:size(jtbl)[1]
+        p += penalty0(jtbl[i,:],ptable[i,:])
+    end
+    p
 end
 
 # shrink job table by skipping 0 column
@@ -222,9 +270,9 @@ end
 # population 
 
 # create initial population of size n
-function initpopulation(n,ptable,gp,mt)
-    jt = jobtablebase(ptable)
-    validatejob!(jt,gp,mt)
+function initpopulation(n)
+    jt = jobtablebase()
+    validatejob!(jt)
     popu = [copy(jt)] # adam
     for i in 2:n
         mutatejob!(jt,1) # make variation of base jobtable
@@ -236,7 +284,7 @@ end
 # sort population table by its valid length
 function sortpopulation!(pptbl)
     shrinkjob!.(pptbl)
-    sort!(pptbl, by = x->validlength(x))
+    sort!(pptbl, by = x->penalty(x))
 end
 
 # survival
@@ -270,18 +318,21 @@ end
 
 # evolution
 # validatejob must be done before this
-function evolution!(pptbl, n, gp, mt, survival = 0.8, elite = 0.2, mutant = 0.05)
+function evolution!(pptbl, n, survival = 0.8, elite = 0.2, mutant = 0.05)
     rep = []
     s = length(pptbl)
     for i in 1:n
         survive!(pptbl,survival)
         fillgeneration!(pptbl,s,elite, mutant)
         for i in 1:length(pptbl)
-            validatejob!(pptbl[i],gp,mt)
+            validatejob!(pptbl[i])
         end
         v = validlength.(pptbl)
         dt = (minimum(v),median(v),maximum(v))
-        #println(dt)
+        
+        if i % 10 == 0
+            println("i:$i => $dt")
+        end
         push!(rep,dt)
 #        pptbl = clipjoblength(pptbl,maximum(v))
     end
