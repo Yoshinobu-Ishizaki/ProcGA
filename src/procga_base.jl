@@ -328,6 +328,19 @@ function initpopulation(n)
     popu
 end
 
+# create initial population of size n from source data
+function initpopulationfrom(jtbl,n, mutant=1.0)
+    popu = [copy(jtbl)]
+    
+    for i in 2:n
+        jt = copy(jtbl)
+        mutatejob!(jt,mutant)
+        validatejob!(jt)
+        push!(popu, jt)
+    end    
+    popu
+end
+
 # sort population table by its valid length
 function sortpopulation!(pptbl)
     sort!(pptbl, by = x->penalty(x))
