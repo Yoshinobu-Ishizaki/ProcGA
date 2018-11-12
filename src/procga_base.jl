@@ -211,11 +211,49 @@ function penalty0(lst,plst)
     p 
 end
 
+# calculate group penalty 
+function grpenalty(jtbl)
+    p = 0
+    for gp in grouptable
+        cc = gp[:timespan]
+        g1 = (x->(x in gp[:id]) ? x : 0).(jtbl)
+
+        v0 = [0,0,0]
+        for i in 1:validlength(g1)
+            v1 = g1[:,i]
+            if sum(v1) > 0
+                if v1 != v0
+                    v0 = v1
+                    # add penalty 
+                    p += cc-1
+                else
+                    p -= 1
+                end
+
+                # check count overflow
+                m = (x->(x>0) ? 1 : 0).(v1)
+                q = sum(m.*mattable[:,2])
+                if q > gp[:cnt]
+                    p += 10
+                end
+                # println("$i=>$p")
+            else
+                if v1 != v0
+                    v0 = v1
+                end
+            end
+        end # for i
+    end # for k
+    p
+end
+
 function penalty(jtbl,ptable = proctable)
     p = validlength(jtbl)
     for i in 1:size(jtbl)[1]
         p += penalty0(jtbl[i,:],ptable[i,:])
     end
+
+    p += grpenalty(jtbl)
     p
 end
 
@@ -257,12 +295,16 @@ function crossover(jtbl1, jtbl2)
     return(c1,c2)
 end
 
+# swap columns of each row independently
 function mutatejob!(jtbl,rate = 0.05)
-    if rand() < rate
-        m = validlength(jtbl)
-        m1 = rand(1:m)
-        m2 = rand(1:m)
-        jtbl[:,m1], jtbl[:,m2] = jtbl[:,m2], jtbl[:,m1] 
+    # m = validlength(jtbl)
+    rw,m = size(jtbl)
+    for i in 1:rw
+        if rand() < rate
+            m1 = rand(1:m)
+            m2 = rand(1:m)
+           jtbl[i,m1], jtbl[i,m2] = jtbl[i,m2], jtbl[i,m1] 
+        end
     end
     return(jtbl)
 end
@@ -276,6 +318,7 @@ function initpopulation(n)
     popu = [copy(jt)] # adam
     for i in 2:n
         mutatejob!(jt,1) # make variation of base jobtable
+        validatejob!(jt) # validate it after mutation
         push!(popu,copy(jt))
     end
     popu
@@ -283,7 +326,6 @@ end
 
 # sort population table by its valid length
 function sortpopulation!(pptbl)
-    shrinkjob!.(pptbl)
     sort!(pptbl, by = x->penalty(x))
 end
 
@@ -313,7 +355,6 @@ function fillgeneration!(pptbl,n,elite = 0.2, mutant = 0.05)
     if length(pptbl) > n
         pop!(pptbl)
     end
-    sortpopulation!(pptbl)
 end
 
 # evolution
@@ -322,12 +363,13 @@ function evolution!(pptbl, n, survival = 0.8, elite = 0.2, mutant = 0.05)
     rep = []
     s = length(pptbl)
     for i in 1:n
+        sortpopulation!(pptbl)
         survive!(pptbl,survival)
         fillgeneration!(pptbl,s,elite, mutant)
-        for i in 1:length(pptbl)
-            validatejob!(pptbl[i])
-        end
-        v = validlength.(pptbl)
+        shrinkjob!.(pptbl)
+        validatejob!.(pptbl)
+
+        v = penalty.(pptbl)
         dt = (minimum(v),median(v),maximum(v))
         
         if i % 10 == 0
