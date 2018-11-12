@@ -1,0 +1,15 @@
+prcno,name
+1,pipecut
+2,anneal_bs_prebend
+3,anneal_ns_prebend
+4,icing
+5,rotbend
+6,pressbend
+7,anneal_bs_precalib
+8,anneal_ns_precalib
+9,vcalib
+10,hcalib
+11,buff_precut
+12,mc_cut
+13,buff_postcut
+14,qc_check
