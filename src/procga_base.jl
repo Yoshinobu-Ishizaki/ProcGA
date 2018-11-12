@@ -250,6 +250,13 @@ function grpenalty(jtbl)
     p
 end
 
+# give if duplicate occurs at not groupable item
+function dupenalty(jtbl)
+    p = 0
+    # calc penalty here
+    p
+end
+
 function penalty(jtbl,ptable = proctable)
     p = validlength(jtbl)
     for i in 1:size(jtbl)[1]
@@ -257,6 +264,7 @@ function penalty(jtbl,ptable = proctable)
     end
 
     p += grpenalty(jtbl)
+    p += dupenalty(jtbl)
     p
 end
 
