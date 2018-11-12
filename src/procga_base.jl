@@ -159,14 +159,17 @@ end
 
 # 
 function validatejob!(jtbl,maxcount = 100)
-    orderjob!(jtbl)
     i = maxcount
+    orderjob!(jtbl)
     while !checkvalidity(jtbl) && i > 0
         validatejob1!(jtbl)
+        orderjob!(jtbl)
         i -= 1
+
     end
     if i == 0
-        println("maxcount reached")
+        # println("maxcount reached")
+        orderjob!(jtbl) # at least let it in order
     end
     return(jtbl)
 end
@@ -313,13 +316,14 @@ end
 
 # create initial population of size n
 function initpopulation(n)
-    jt = jobtablebase()
-    validatejob!(jt)
-    popu = [copy(jt)] # adam
-    for i in 2:n
-        mutatejob!(jt,1) # make variation of base jobtable
+    # jt = jobtablebase()
+    popu = [] 
+    for i in 1:n
+        jt = jobtableshuffle() # init with shuffled data
+        # mutatejob!(jt,1) # make variation of base jobtable
+        shrinkjob!(jt)
         validatejob!(jt) # validate it after mutation
-        push!(popu,copy(jt))
+        push!(popu,jt)
     end
     popu
 end
@@ -359,7 +363,7 @@ end
 
 # evolution
 # validatejob must be done before this
-function evolution!(pptbl, n, survival = 0.8, elite = 0.2, mutant = 0.05)
+function evolution!(pptbl, n, nr=10, survival=0.8, elite=0.2, mutant=0.05)
     rep = []
     s = length(pptbl)
     for i in 1:n
@@ -372,7 +376,7 @@ function evolution!(pptbl, n, survival = 0.8, elite = 0.2, mutant = 0.05)
         v = penalty.(pptbl)
         dt = (minimum(v),median(v),maximum(v))
         
-        if i % 10 == 0
+        if i % nr == 0
             println("i:$i => $dt")
         end
         push!(rep,dt)
