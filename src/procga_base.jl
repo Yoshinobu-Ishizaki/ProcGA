@@ -359,10 +359,15 @@ function fillgeneration!(pptbl,n,elite = 0.2, mutant = 0.05)
     s = length(pptbl)
     ss = n - s
     
+    en = Int(floor(s*elite))
     while ss > 0
-        en = Int(floor(s*elite))
-        i1 = rand() < 0.2 ? rand(1:en) : rand(1:s)
-        i2 = rand() < 0.2 ? rand(1:en) : rand(1:s)
+        if rand() < elite
+            i1 = rand(1:en)
+            i2 = rand(1:en)
+        else
+            i1 = rand(1:s)
+            i2 = rand(1:s)
+        end
         c1,c2 = crossover(pptbl[i1],pptbl[i2])
         mutatejob!(c1,mutant)
         mutatejob!(c2,mutant)
