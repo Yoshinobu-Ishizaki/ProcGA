@@ -15,7 +15,7 @@ function settable(ptbl, gtbl, mtbl)
     global proctable = ptbl
     global grouptable = gtbl
     global mattable = mtbl
-    return(true)
+    return()
 end
 
 # job table's columns are time units, therefore it is a schedule matrix
@@ -322,7 +322,7 @@ function initpopulation(n)
         jt = jobtableshuffle() # init with shuffled data
         # mutatejob!(jt,1) # make variation of base jobtable
         shrinkjob!(jt)
-        validatejob!(jt) # validate it after mutation
+        # validatejob!(jt) # validate it after mutation
         push!(popu,jt)
     end
     popu
@@ -335,7 +335,7 @@ function initpopulationfrom(jtbl,n, mutant=1.0)
     for i in 2:n
         jt = copy(jtbl)
         mutatejob!(jt,mutant)
-        validatejob!(jt)
+        # validatejob!(jt)
         push!(popu, jt)
     end    
     popu
@@ -389,7 +389,8 @@ function evolution!(pptbl, n, nr=10, survival=0.8, elite=0.2, mutant=0.05)
         survive!(pptbl,survival)
         fillgeneration!(pptbl,s,elite, mutant)
         shrinkjob!.(pptbl)
-        validatejob!.(pptbl)
+        orderjob!.(pptbl)
+        # validatejob!.(pptbl)
 
         v = penalty.(pptbl)
         dt = (minimum(v),median(v),maximum(v))
