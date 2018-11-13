@@ -129,51 +129,6 @@ function checkvalidity(jtbl)
     return(flg)
 end
 
-function validatejob1!(jtbl)
-    mt = mattable
-    k,ll = size(jtbl)
-    for i in 1:ll
-        if sum(jtbl[:,i]) > 0
-            q = mt[1,2]
-            for j in 1:k
-                a = jtbl[j,i]
-                for m in (j+1):k
-                    if jtbl[m,i] == a
-                        if isgroupable(a)
-                            q += mt[m,2]
-                            if q > groupcapacity(a)
-                                jtbl[m,i:end] = circshift(jtbl[m,i:end],1)
-                                break
-                            end
-                        else
-                            # circular shift latter data
-                            jtbl[m,i:end] = circshift(jtbl[m,i:end],1)
-                            break
-                        end
-                    end
-                end
-            end
-        end
-    end
-end
-
-# 
-function validatejob!(jtbl,maxcount = 100)
-    i = maxcount
-    orderjob!(jtbl)
-    while !checkvalidity(jtbl) && i > 0
-        validatejob1!(jtbl)
-        orderjob!(jtbl)
-        i -= 1
-
-    end
-    if i == 0
-        # println("maxcount reached")
-        orderjob!(jtbl) # at least let it in order
-    end
-    return(jtbl)
-end
-
 # get valid length of job time table
 function validlength(jtb)
     l0 = size(jtb)[2]
@@ -373,7 +328,6 @@ function initpopulation(n)
         jt = jobtableshuffle() # init with shuffled data
         # mutatejob!(jt,1) # make variation of base jobtable
         shrinkjob!(jt)
-        # validatejob!(jt) # validate it after mutation
         push!(popu,jt)
     end
     popu
@@ -386,7 +340,6 @@ function initpopulationfrom(jtbl,n, mutant=1.0)
     for i in 2:n
         jt = copy(jtbl)
         mutatejob!(jt,mutant)
-        # validatejob!(jt)
         push!(popu, jt)
     end    
     popu
@@ -431,7 +384,6 @@ function fillgeneration!(pptbl,n,elite = 0.2, mutant = 0.05)
 end
 
 # evolution
-# validatejob must be done before this
 function evolution!(pptbl, n, nr=10, survival=0.8, elite=0.2, mutant=0.05)
     rep = []
     s = length(pptbl)
@@ -441,7 +393,6 @@ function evolution!(pptbl, n, nr=10, survival=0.8, elite=0.2, mutant=0.05)
         fillgeneration!(pptbl,s,elite, mutant)
         shrinkjob!.(pptbl)
         orderjob!.(pptbl)
-        # validatejob!.(pptbl)
 
         v = penalty.(pptbl)
         dt = (minimum(v),median(v),maximum(v))
