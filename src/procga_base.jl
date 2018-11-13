@@ -289,7 +289,8 @@ function dupenalty(jtbl)
     p = 0
     for i in 1:validlength(jtbl)
         col = jtbl[:,i]
-        cc = col[@. col > 0 & ~isgroupable(col)]
+        col = col[col .> 0]
+        cc = col[@. ~isgroupable(col)]
         cs = Set(cc)
         p += (length(cc) - length(cs))
     end
@@ -297,16 +298,18 @@ function dupenalty(jtbl)
 end
 
 # You can give your own penalty function by overriding this.
-function penalty(jtbl)
+function orgpenalty(jtbl)
     p = validlength(jtbl)
     
     p += serpenalty(jtbl)
     p += grpenalty(jtbl)
     p += grdupenalty(jtbl)
-    p += dupenalty(jtbl)
+    p += 2*dupenalty(jtbl) # weight
 
     p
 end
+
+penalty(jtbl) = orgpenalty(jtbl)
 
 # shrink job table by skipping 0 column
 function shrinkjob1!(jtbl)
