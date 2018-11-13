@@ -351,12 +351,12 @@ end
 
 # swap columns of each row independently
 function mutatejob!(jtbl,rate = 0.05)
-    # m = validlength(jtbl)
-    rw,m = size(jtbl)
+    c1 = validlength(jtbl)
+    rw,c2 = size(jtbl)
     for i in 1:rw
         if rand() < rate
-            m1 = rand(1:m)
-            m2 = rand(1:m)
+            m1 = rand(1:c1)
+            m2 = rand(1:c2) # swap valid cell with all including zero
            jtbl[i,m1], jtbl[i,m2] = jtbl[i,m2], jtbl[i,m1] 
         end
     end
