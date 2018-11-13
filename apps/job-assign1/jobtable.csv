@@ -1,0 +1,7 @@
+job,load,qty
+pipecut,1,260
+pressbend,3,27
+rotbend,3,51
+hcalib,3,79
+vcalib,2,95
+mc,1,242
