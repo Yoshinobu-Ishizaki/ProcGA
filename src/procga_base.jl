@@ -304,7 +304,7 @@ function orgpenalty(jtbl)
     p += serpenalty(jtbl)
     p += grpenalty(jtbl)
     p += grdupenalty(jtbl)
-    p += 2*dupenalty(jtbl) # weight
+    p += 5*dupenalty(jtbl) # weight
 
     p
 end
