@@ -214,6 +214,15 @@ function penalty0(lst,plst)
     p 
 end
 
+# penalty of non-consecutive occurence
+function serpenalty(jtbl)
+    p = 0
+    for i in 1:size(jtbl)[1]
+        p += penalty0(jtbl[i,:],proctable[i,:])
+    end
+    p
+end
+
 # calculate group penalty 
 function grpenalty(jtbl)
     p = 0
@@ -250,21 +259,52 @@ function grpenalty(jtbl)
     p
 end
 
-# give if duplicate occurs at not groupable item
-function dupenalty(jtbl)
+# return set of grouping number for given list
+function getgroups(lst)
+    gs = Int[]
+    for gp in grouptable
+        g = gp[:grp]
+        for x in lst
+            if x in gp[:id]
+                push!(gs,g)
+            end
+        end
+    end
+    Set(gs)
+end
+
+# give exclusive group duplication penalty 
+function grdupenalty(jtbl)
     p = 0
-    # calc penalty here
+    for j in 1:validlength(jtbl)
+        lst = jtbl[:,j]
+        x = length(getgroups(lst))
+        p += ( x>1 ? (x-1) : 0 )
+    end
     p
 end
 
-function penalty(jtbl,ptable = proctable)
-    p = validlength(jtbl)
-    for i in 1:size(jtbl)[1]
-        p += penalty0(jtbl[i,:],ptable[i,:])
+# give if duplicate occurs at not groupable item
+function dupenalty(jtbl)
+    p = 0
+    for i in 1:validlength(jtbl)
+        col = jtbl[:,i]
+        cc = col[@. col > 0 & ~isgroupable(col)]
+        cs = Set(cc)
+        p += (length(cc) - length(cs))
     end
+    p
+end
 
+# You can give your own penalty function by overriding this.
+function penalty(jtbl)
+    p = validlength(jtbl)
+    
+    p += serpenalty(jtbl)
     p += grpenalty(jtbl)
+    p += grdupenalty(jtbl)
     p += dupenalty(jtbl)
+
     p
 end
 

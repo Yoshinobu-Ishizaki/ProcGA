@@ -1,3 +1,3 @@
-name,prcno,qty,timespan
-anneal_bs,[2;7],300,3
-anneal_ns,[3;8],300,3
+name,prcno,qty,timespan,grp
+anneal_bs,[2;7],300,3,1
+anneal_ns,[3;8],300,3,1
