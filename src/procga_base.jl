@@ -87,15 +87,13 @@ function crossover(jtbl1::Array{Int,2}, jtbl2::Array{Int,2})
 end
 
 # swap columns of each row independently
-function mutatejob!(jtbl::Array{Int,2},rate = 0.05)
+function mutatejob!(jtbl::Array{Int,2})
     c1 = validlength(jtbl)
     rw,c2 = size(jtbl)
     for i in 1:rw
-        if rand() < rate
-            m1 = rand(1:c1)
-            m2 = rand(1:c2) # swap valid cell with all including zero
-           jtbl[i,m1], jtbl[i,m2] = jtbl[i,m2], jtbl[i,m1] 
-        end
+        m1 = rand(1:c1)
+        m2 = rand(1:c2) # swap valid cell with all including zero
+        jtbl[i,m1], jtbl[i,m2] = jtbl[i,m2], jtbl[i,m1] 
     end
     return(jtbl)
 end
@@ -134,11 +132,11 @@ function populateshuffle(jtbl::Array{Int,2},n::Int)
 end
 
     # create initial population of size n from source data
-function populatefrom(jtbl::Array{Int,2},n::Int, mutant=1.0)
+function populatefrom(jtbl::Array{Int,2},n::Int)
     popu = [copy(jtbl)]
     for i in 2:n
         jt = copy(jtbl)
-        mutatejob!(jt,mutant)
+        mutatejob!(jt)
         push!(popu, jt)
     end    
     popu
@@ -158,7 +156,7 @@ function survive!(pptbl::Array{Array{Int,2},1}, survival = 0.8)
 end
 
 # fill up population using elite children and mutant genes
-function fillgeneration!(pptbl::Array{Array{Int,2},1},n::Int,elite = 0.2, mutant = 0.05)
+function fillgeneration!(pptbl::Array{Array{Int,2},1},n::Int,elite = 0.2, mutant = 0.05, jobswitch = false)
     s = length(pptbl)
     ss = n - s
     
@@ -172,8 +170,16 @@ function fillgeneration!(pptbl::Array{Array{Int,2},1},n::Int,elite = 0.2, mutant
             i2 = rand(1:s)
         end
         c1,c2 = crossover(pptbl[i1],pptbl[i2])
-        mutatejob!(c1,mutant)
-        mutatejob!(c2,mutant)
+        if rand() < mutant
+            if jobswitch
+                # defined in jobassign.jl
+                switchjob!(c1)
+                switchjob!(c2)
+            else
+                mutatejob!(c1)
+                mutatejob!(c2)
+            end
+        end
         push!(pptbl,c1,c2)
         ss -= 2
     end
@@ -183,7 +189,7 @@ function fillgeneration!(pptbl::Array{Array{Int,2},1},n::Int,elite = 0.2, mutant
 end
 
 # evolution
-function evolution!(pptbl::Array{Array{Int,2},1}, n::Int, nr=10, survival=0.8, elite=0.2, mutant=0.05)
+function evolution!(pptbl::Array{Array{Int,2},1}, n::Int, nr=10, survival=0.8, elite=0.2, mutant=0.05, jobswitch = false)
     rep = Array{Array{Int,1},1}()
     s = length(pptbl)
     for i in 1:n
