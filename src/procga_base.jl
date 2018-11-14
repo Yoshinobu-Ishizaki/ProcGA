@@ -74,10 +74,15 @@ end
 # crossover and mutation
 # crossover exchange rows of two genes at middle
 function crossover(jtbl1::Array{Int,2}, jtbl2::Array{Int,2})
-    rows = size(jtbl1)[1]
-    m = rows ÷ 2
-    c1 = vcat(jtbl1[1:m,:],jtbl2[m+1:end,:])
-    c2 = vcat(jtbl2[1:m,:],jtbl1[m+1:end,:])
+    if jtbl1 != jtbl2
+        rows = size(jtbl1)[1]
+        m = rows ÷ 2
+        c1 = vcat(jtbl1[1:m,:],jtbl2[m+1:end,:])
+        c2 = vcat(jtbl2[1:m,:],jtbl1[m+1:end,:])
+    else
+        c1 = copy(jtbl1)
+        c2 = copy(jtbl1)
+    end
     return(c1,c2)
 end
 
@@ -172,7 +177,7 @@ function fillgeneration!(pptbl::Array{Array{Int,2},1},n::Int,elite = 0.2, mutant
         push!(pptbl,c1,c2)
         ss -= 2
     end
-    if length(pptbl) > n
+    while length(pptbl) > n
         pop!(pptbl)
     end
 end

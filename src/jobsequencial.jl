@@ -81,7 +81,7 @@ function groupcapacity(x)
 end
 
 # check if each column is valid combination of process
-function checkvalidity(jtbl)
+function checkvalidity(jtbl::Array{Int,2})
     mt = mattable
     flg = true
     k,ll = size(jtbl)
@@ -113,43 +113,37 @@ function checkvalidity(jtbl)
     return(flg)
 end
 
-# penalty to non-consecutive numbers!
-
-# check incontinuity of lst corresponding to process list plst
-function serpenalty0(lst,plst)
-    p = 0
-    e0 = 0 # element 
-    cm = 0
-    idx = findlast(x->(x>0),lst)
-    
-    for i in 1:idx
-        e1 = lst[i]
-        if e1 != e0
-            if e1 > 0 
-                e0 = e1
-                cm = plst[e0] - 1 # max time units for e0-th process
-            else
-                # add penalty because 0 occured between numbers, cm can be zero
-                p += cm
-            end
-        else 
-            cm -= 1
-        end
-    end # for
-    p 
-end
-
 # penalty of non-consecutive occurence
-function serpenalty(jtbl)
+function serpenalty(jtbl::Array{Int,2})
     p = 0
-    for i in 1:size(jtbl)[1]
-        p += serpenalty0(jtbl[i,:],proctable[i,:])
-    end
+    for k in 1:size(jtbl)[1]
+        lst = jtbl[k,:]
+        plst = proctable[k,:]
+
+        e0 = 0 # element 
+        cm = 0
+        idx = findlast(x->(x>0),lst)
+        
+        for i in 1:idx
+            e1 = lst[i]
+            if e1 != e0
+                if e1 > 0 
+                    e0 = e1
+                    cm = plst[e0] - 1 # max time units for e0-th process
+                else
+                    # add penalty because 0 occured between numbers, cm can be zero
+                    p += cm
+                end
+            else 
+                cm -= 1
+            end
+        end # i
+    end # k
     p
 end
 
 # calculate group penalty 
-function grpenalty(jtbl)
+function grpenalty(jtbl::Array{Int,2})
     p = 0
     for gp in grouptable
         cc = gp[:timespan]
@@ -199,7 +193,7 @@ function getgroups(lst)
 end
 
 # give exclusive group duplication penalty 
-function grdupenalty(jtbl)
+function grdupenalty(jtbl::Array{Int,2})
     p = 0
     for j in 1:validlength(jtbl)
         lst = jtbl[:,j]
@@ -210,7 +204,7 @@ function grdupenalty(jtbl)
 end
 
 # give if duplicate occurs at not groupable item
-function dupenalty(jtbl)
+function dupenalty(jtbl::Array{Int,2})
     p = 0
     for i in 1:validlength(jtbl)
         col = jtbl[:,i]
@@ -223,7 +217,7 @@ function dupenalty(jtbl)
 end
 
 # You can give your own penalty function by overriding this.
-function seqpenalty(jtbl)
+function seqpenalty(jtbl::Array{Int,2})
     p = validlength(jtbl)
     
     p += serpenalty(jtbl)
