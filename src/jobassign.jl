@@ -32,17 +32,17 @@ function findassignnum(x,atbl = assigntable)
 end
 
 # make correct assignment 
-function assignjob!(jtbl::Array{Int,2},atbl = assigntable)
-    for i in 1:size(jtbl,1)
-        for j in 1:size(jtbl,2)
-            x = jtbl[i,j]
+function assignjob!(jtbl::Array{Array{Int,1},1},atbl = assigntable)
+    for i in 1:length(jtbl)
+        for j in 1:length(jtbl[i])
+            x = jtbl[i][j]
             if !isassignable(x,atbl[i])
                 rw = findassignnum(x,atbl)
                 k2 = 0
                 for r in rw
-                    k2 = findfirst(x->x==0, jtbl[r,:])
+                    k2 = findfirst(x->x==0, jtbl[r])
                     if k2 > 0
-                        jtbl[i,j], jtbl[r,k2] = jtbl[r,k2], jtbl[i,j]
+                        jtbl[i][j], jtbl[r][k2] = jtbl[r][k2], jtbl[i][j]
                         break
                     end
                 end
@@ -53,15 +53,15 @@ function assignjob!(jtbl::Array{Int,2},atbl = assigntable)
 end
 
 # randomly switch column,row of elements if they are switchable.
-function switchjob!(jtbl::Array{Int,2}, atbl = assigntable)
-    rw = size(jtbl,1)
+function switchjob!(jtbl::Array{Array{Int,1},1}, atbl = assigntable)
+    rw = length(jtbl)
     col = validlength(jtbl)
     
     r1 = rand(1:rw)
     c1 = rand(1:col)
     r2 = sample(findassignnum(r1,atbl),1)[1]
     c2 = sample(1:col,1)[1]
-    jtbl[r1,c1],jtbl[r2,c2] = jtbl[r2,c2], jtbl[r1,c1]
+    jtbl[r1][c1],jtbl[r2][c2] = jtbl[r2][c2], jtbl[r1][c1]
     jtbl
 end
 

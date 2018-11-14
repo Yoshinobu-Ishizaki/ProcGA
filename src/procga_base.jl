@@ -8,77 +8,127 @@ using LinearAlgebra, Statistics
 using Random
 using DataFrames
 
-# sort job table in order while keeping position of 0 entity
-function orderjob!(jtbl::Array{Int,2})
-    for i in 1:size(jtbl)[1]
-        lst = jtbl[i,:]
-        st = sort(lst[lst.>0]) # sorted value
-        pos = range(1,stop=length(lst))[lst.>0] # index of non zero
-    
-        for k in 1:length(pos)
-            lst[pos[k]] = st[k]
-        end
-        jtbl[i,:] = lst
-    end
-    jtbl
-end
-
-# validation 
-
-# get valid length of job time table
-function validlength(jtb::Array{Int,2})
-    l0 = size(jtb)[2]
-    l = l0
-    for i in l0:-1:1
-        if sum(jtb[:,i]) == 0
-            l-=1
-        else
-            break
-        end
-    end
-    return(l)
-end
-
 # this must be overriden by user
 function penalty()
     return(0)
 end
 
+# taking column  
+function coltake(lst::Array{Int,1},idx)
+    lst[idx]
+end
+
+function coltake(tbl::Array{Array{Int,1},1},idx)
+    coltake.(tbl,idx)
+end
+
+# validation 
+# get valid length of job time table
+function validlength(lst::Array{Int,1})
+    findlast(x->(x>0),lst)
+end
+
+function validlength(tbl::Array{Array{Int,1},1})
+    v = validlength.(tbl)
+    maximum(v)
+end
+
+# ============================== penalty =================================
+
+# consequtive use limit 
+# if id continues more than lmt give penalty
+function listcontinuity(lst::Array{Int,1},id,lmt)
+    ln = length(lst)
+    p = zeros(Int,ln)
+    chk = [(x == id ? 1 : 0) for x in lst]
+    
+    cnt = 0
+    x0 = 0
+    for i in 1:ln
+        x = chk[i]
+        if x > 0
+            cnt += 1
+            p[i] = cnt
+        else
+            cnt = 0
+        end
+    end
+    
+    [ x > lmt ? (x-lmt) : 0 for x in p]
+end
+
+function listcontinuity(tbl::Array{Array{Int,1},1},id,lmt)
+    [listcontinuity(lst,id,lmt) for lst in tbl] 
+end   
+
+function listcontinuity(tbl::Array{Array{Int,1},1}, lmt::Array{Int,1})
+    sum([listcontinuity(tbl,i,lmt[i]) for i in 1:length(lmt)])
+end
+
+function listcoldup(tbl::Array{Array{Int,1},1})
+    a = Array{Int,1}()
+    for i in 1:length(tbl[1])
+        v = coltake(tbl,i)
+        v2 = v[v.>0]
+        l = sum(v)>0 ? length(Set(v2)) : 0
+        s = length(v2) - l
+        push!(a,s)
+    end
+    [x .* a for x in tbl]
+end
+
+# ==================== job table editing =============================
+
+# swap job list based on penaly list
+function swapjob!(jlst::Array{Int,1},plst::Array{Int,1})
+    pos = findmax(plst)[2]
+    if pos > 0
+        p2 = rand(1:length(jlst))
+        jlst[pos],jlst[p2] = jlst[p2],jlst[pos]
+    end
+end
+swapjob!(tbl::Array{Array{Int,1},1},ptbl::Array{Array{Int,1},1}) = swapjob!.(tbl,ptbl)
+
+# sort job table in order while keeping position of 0 entity
+function orderjob!(jlst::Array{Int,1})
+    st = sort(jlst[jlst.>0]) # sorted value
+    pos = range(1,stop=length(jlst))[jlst.>0] # index of non zero
+
+    for k in 1:length(pos)
+        jlst[pos[k]] = st[k]
+    end
+    jlst
+end
+orderjob!(tbl::Array{Array{Int,1},1}) = orderjob!.(tbl)
+
 # shrink job table by skipping 0 column
-function shrinkjob1!(jtbl::Array{Int,2})
-    flg = false
-    cols = validlength(jtbl)
+function shrinkjob!(tbl::Array{Array{Int,1},1})
+    cols = validlength(tbl)
     for j in 1:cols
-        if sum(jtbl[:,j]) == 0
-            jtbl[:,j:end] = circshift(jtbl[:,j:end],(0,-1))
-            flg = true
+        v = coltake(tbl,j)
+        if sum(v) == 0
+            for i in length(tbl)
+                tbl[i][j:end] = circshift(tbl[i][j:end],-1)
+            end
         end
     end
-    return(flg)
 end
 
-function shrinkjob!(jtbl::Array{Int,2})
-    while true
-        if !shrinkjob1!(jtbl)
-            break
-        end
-    end
-    jtbl
-end    
-
-function clipjob(jtbl::Array{Int,2})
-    m = validlength(jtbl)
-    jtbl[:,1:m]
+function clipjob(jlst::Array{Int,1})
+    jlst[1:validlength(jlst)]
 end
+clipjob!(tbl::Array{Array{Int,1},1}) = clipjob!.(tbl)
 
-# crossover and mutation
+
+# ============================== crossover and mutation ==============================
+
 # crossover exchange rows of two genes at middle
-function crossover(jtbl1::Array{Int,2}, jtbl2::Array{Int,2})
+function crossover(jtbl1::Array{Array{Int,1},1}, jtbl2::Array{Array{Int,1},1})
     if jtbl1 != jtbl2
-        rows = size(jtbl1)[1]
+        rows = length(jtbl1)
         m = rows ÷ 2
-        c1 = vcat(jtbl1[1:m,:],jtbl2[m+1:end,:])
-        c2 = vcat(jtbl2[1:m,:],jtbl1[m+1:end,:])
+        c1 = vcat(jtbl1[1:m],jtbl2[m+1:end])
+        c2 = vcat(jtbl2[1:m],jtbl1[m+1:end])
     else
         c1 = copy(jtbl1)
         c2 = copy(jtbl1)
@@ -86,77 +136,55 @@ function crossover(jtbl1::Array{Int,2}, jtbl2::Array{Int,2})
     return(c1,c2)
 end
 
-# swap columns of each row independently
-function mutatejob!(jtbl::Array{Int,2})
-    c1 = validlength(jtbl)
-    rw,c2 = size(jtbl)
-    for i in 1:rw
-        m1 = rand(1:c1)
-        m2 = rand(1:c2) # swap valid cell with all including zero
-        jtbl[i,m1], jtbl[i,m2] = jtbl[i,m2], jtbl[i,m1] 
-    end
-    return(jtbl)
+# swap elements between valid index span and all
+function mutatejob!(jlst::Array{Int,1})
+    c1 = validlength(jlst)
+    c2 = length(jlst)
+    m1 = rand(1:c1)
+    m2 = rand(1:c2) # swap valid cell with all including zero
+    jlst[m1], jlst[m2] = jlst[m2], jlst[m1] 
+    return(jlst)
 end
+mutatejob!(tbl::Array{Array{Int,1},1}) = mutatejob!.(tbl)
 
-function shufflejob!(jtbl::Array{Int,2})
-    for i in 1:size(jtbl)[1]
-        jtbl[i,:] = shuffle(jtbl[i,:])
-    end
-    jtbl
-end
+# ============================== population ==============================
 
-# population 
-
-# OBSOLETE!
-# create initial population of size n
-# function initpopulation(n)
-#     # jt = jobtablebase()
-#     popu = [] 
-#     for i in 1:n
-#         jt = jobtableshuffle() # init with shuffled data
-#         # mutatejob!(jt,1) # make variation of base jobtable
-#         shrinkjob!(jt)
-#         push!(popu,jt)
-#     end
-#     popu
-# end
-
-function populateshuffle(jtbl::Array{Int,2},n::Int)
-    popu = [copy(jtbl)]
+function populateshuffle(tbl::Array{Array{Int,1},1},n::Int)
+    popu = [copy(tbl)]
     for i in 2:n
-        jt = copy(jtbl)
-        shufflejob!(jt)
+        jt = copy(tbl)
+        shuffle!.(jt)
         push!(popu,jt)
     end
     popu
 end
 
-    # create initial population of size n from source data
-function populatefrom(jtbl::Array{Int,2},n::Int)
-    popu = [copy(jtbl)]
+# create initial population of size n from source data
+function populatefrom(jlst::Array{Array{Int,1},1},n::Int)
+    popu = [copy(jlst)]
     for i in 2:n
-        jt = copy(jtbl)
-        mutatejob!(jt)
+        jt = copy(jlst)
+        mutatejob!.(jt)
         push!(popu, jt)
     end    
     popu
 end
 
 # sort population table by its valid length
-function sortpopulation!(pptbl::Array{Array{Int,2},1})
+function sortpopulation!(pptbl::Array{Array{Array{Int,1},1},1})
     sort!(pptbl, by = x->penalty(x))
 end
 
 # survival
 # inferior genes cannot live long
-function survive!(pptbl::Array{Array{Int,2},1}, survival = 0.8)
+function survive!(pptbl::Array{Array{Array{Int,1},1},1}, survival = 0.8)
     ll = Int(floor(length(pptbl) * survival))
     splice!(pptbl,ll:length(pptbl))
     pptbl
 end
 
 # fill up population using elite children and mutant genes
-function fillgeneration!(pptbl::Array{Array{Int,2},1},n::Int,elite = 0.2, mutant = 0.05, jobswitch = false)
+function fillgeneration!(pptbl::Array{Array{Array{Int,1},1},1},n::Int,elite = 0.2, mutant = 0.05, jobswitch = false)
     s = length(pptbl)
     ss = n - s
     
@@ -176,8 +204,8 @@ function fillgeneration!(pptbl::Array{Array{Int,2},1},n::Int,elite = 0.2, mutant
                 switchjob!(c1)
                 switchjob!(c2)
             else
-                mutatejob!(c1)
-                mutatejob!(c2)
+                mutatejob!.(c1)
+                mutatejob!.(c2)
             end
         end
         push!(pptbl,c1,c2)
@@ -189,7 +217,7 @@ function fillgeneration!(pptbl::Array{Array{Int,2},1},n::Int,elite = 0.2, mutant
 end
 
 # evolution
-function evolution!(pptbl::Array{Array{Int,2},1}, n::Int, nr=10, survival=0.8, elite=0.2, mutant=0.05, jobswitch = false)
+function evolution!(pptbl::Array{Array{Array{Int,1},1},1}, n::Int, nr=10, survival=0.8, elite=0.2, mutant=0.05, jobswitch = false)
     rep = Array{Array{Int,1},1}()
     s = length(pptbl)
     for i in 1:n
