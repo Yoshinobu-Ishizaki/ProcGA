@@ -22,6 +22,11 @@ function coltake(tbl::Array{Array{Int,1},1},idx)
     coltake.(tbl,idx)
 end
 
+# return list of sum of each column
+function colsumlist(tbl::Array{Array{Int,1},1})
+    [sum(coltake(tbl,i)) for i in 1:length(tbl[1])]
+end
+
 # validation 
 # get valid length of job time table
 function validlength(lst::Array{Int,1})
@@ -114,6 +119,19 @@ function shrinkjob!(tbl::Array{Array{Int,1},1})
     end
 end
 
+# this has same effect as shrinkjob
+function colsortjob!(tbl::Array{Array{Int,1},1})
+    col = length(tbl[1])
+    vs = [sum(coltake(tbl,i)) for i in 1:col]
+    ky = sortperm(vs, by = x->(x>0 ? x : Inf))
+
+    for i in 1:length(tbl)
+        tbl[i] = tbl[i][ky]
+    end
+    tbl
+    # [vs,ky]
+end
+
 function clipjob(jlst::Array{Int,1})
     jlst[1:validlength(jlst)]
 end
@@ -124,14 +142,13 @@ clipjob!(tbl::Array{Array{Int,1},1}) = clipjob!.(tbl)
 
 # crossover exchange rows of two genes at middle
 function crossover(jtbl1::Array{Array{Int,1},1}, jtbl2::Array{Array{Int,1},1})
-    if jtbl1 != jtbl2
-        rows = length(jtbl1)
+    c1 = deepcopy(jtbl1)
+    c2 = deepcopy(jtbl2)
+    if c1 != c2
+        rows = length(c1)
         m = rows ÷ 2
-        c1 = vcat(jtbl1[1:m],jtbl2[m+1:end])
-        c2 = vcat(jtbl2[1:m],jtbl1[m+1:end])
-    else
-        c1 = copy(jtbl1)
-        c2 = copy(jtbl1)
+        c1 = vcat(c1[1:m],c2[m+1:end])
+        c2 = vcat(c2[1:m],c1[m+1:end])
     end
     return(c1,c2)
 end
@@ -150,9 +167,9 @@ mutatejob!(tbl::Array{Array{Int,1},1}) = mutatejob!.(tbl)
 # ============================== population ==============================
 
 function populateshuffle(tbl::Array{Array{Int,1},1},n::Int)
-    popu = [copy(tbl)]
+    popu = [deepcopy(tbl)]
     for i in 2:n
-        jt = copy(tbl)
+        jt = deepcopy(tbl)
         shuffle!.(jt)
         push!(popu,jt)
     end
@@ -161,9 +178,9 @@ end
 
 # create initial population of size n from source data
 function populatefrom(jlst::Array{Array{Int,1},1},n::Int)
-    popu = [copy(jlst)]
+    popu = [deepcopy(jlst)]
     for i in 2:n
-        jt = copy(jlst)
+        jt = deepcopy(jlst)
         mutatejob!.(jt)
         push!(popu, jt)
     end    
@@ -225,7 +242,8 @@ function evolution!(pptbl::Array{Array{Array{Int,1},1},1}, n::Int, nr=10, surviv
         survive!(pptbl,survival)
         fillgeneration!(pptbl,s,elite, mutant)
         shrinkjob!.(pptbl)
-        orderjob!.(pptbl)
+        # orderjob!.(pptbl)
+        colsortjob!.(pptbl)
 
         v = penalty.(pptbl)
         dt = [minimum(v),Int(round(median(v))),maximum(v)]

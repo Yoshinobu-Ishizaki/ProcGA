@@ -204,14 +204,14 @@ function grdupenalty(jtbl::Array{Int,2})
 end
 
 # give if duplicate occurs at not groupable item
-function dupenalty(jtbl::Array{Int,2})
-    p = 0
+function listduplicate(jtbl::Array{Array{Int,1},1})
+    p = zeros(Int,length(jtbl[1]))
     for i in 1:validlength(jtbl)
-        col = jtbl[:,i]
+        col = coltake(jtbl,i)
         col = col[col .> 0]
         cc = col[@. ~isgroupable(col)]
         cs = Set(cc)
-        p += (length(cc) - length(cs))
+        p[i] = (length(cc) - length(cs))
     end
     p
 end
