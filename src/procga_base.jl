@@ -51,7 +51,7 @@ end
 # ============================== penalty =================================
 
 # consequtive use limit 
-# if id continues more than lmt give penalty
+# if id continues more than lmt, give penalty
 function listcontinuity(lst::Array{Int,1},id,lmt)
     ln = length(lst)
     p = zeros(Int,ln)
