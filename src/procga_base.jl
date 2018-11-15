@@ -30,7 +30,8 @@ end
 
 # return list of sum of each column
 function colsumlist(tbl::Array{Array{Int,1},1})
-    [sum(coltake(tbl,i)) for i in 1:length(tbl[1])]
+    # [sum(coltake(tbl,i)) for i in 1:length(tbl[1])]
+    sum(tbl) # this returns list 
 end
 
 # validation 
@@ -83,15 +84,24 @@ end
 # end
 
 function listcoldup(tbl::Array{Array{Int,1},1})
-    a = Array{Int,1}()
+    n = length(tbl)
+    pp = [ zeros(Int,length(tbl[1])) for x in tbl]
+
     for i in 1:length(tbl[1])
+        p = zeros(Int,length(tbl))
         v = coltake(tbl,i)
         v2 = v[v.>0]
-        l = sum(v)>0 ? length(Set(v2)) : 0
-        s = length(v2) - l
-        push!(a,s)
+        for x in unique(v2)
+            ck = v[v.==x]
+            if length(ck) > 1 # duplicate
+                p .+= [ c == x ? 1 : 0 for c in v ]
+            end
+        end
+        for j in 1:n
+            pp[j][i] = p[j]
+        end
     end
-    [x .* a for x in tbl]
+    pp
 end
 
 # add penalty if each column is not same as preceeding one
@@ -151,6 +161,14 @@ function listoveruse(tbl::Array{Array{Int,1},1}, id::Int, lmt::Int)
     [pl .* x for x in vn]
 end
 
+function listoveruse(tbl::Array{Array{Int,1},1}, lmt::Array{Int,1})
+    pl = listoveruse(tbl,1,lmt[1])
+    for i in 2:length(lmt)
+        pl .+= listoveruse(tbl,i,lmt[i])
+    end
+    pl
+end
+
 # check short interval between same work 
 function listshortinterval(tbl::Array{Array{Int,1},1}, id::Int, lmt::Int)
     vn = listusing.(tbl,id)
@@ -178,7 +196,7 @@ function listshortinterval(tbl::Array{Array{Int,1},1}, id::Int, lmt::Int)
 end
 
 # uses default value
-function listshortinterval(tbl::Array{Array{Int,1},1}, lmt = intervaltable)
+function listshortinterval(tbl::Array{Array{Int,1},1}, lmt::Array{Int,1})
     pl = listshortinterval(tbl,1,lmt[1])
     for i in 2:length(lmt)
         pl .+= listshortinterval(tbl,i,lmt[i])
@@ -187,6 +205,21 @@ function listshortinterval(tbl::Array{Array{Int,1},1}, lmt = intervaltable)
 end
 
 # ==================== job table editing =============================
+
+# randomly switch column,row of elements based on penalty list
+function switchjob!(jtbl::Array{Array{Int,1},1},plst::Array{Array{Int,1},1})
+    rw = length(jtbl)
+    col = validlength(jtbl)
+    
+    c1 = maximum((x->x[2]).(findmax.(plst)))
+    r1 = rand(1:rw)
+
+    c2 = rand(1:col)
+    r2 = rand(1:rw)
+    
+    jtbl[r1][c1],jtbl[r2][c2] = jtbl[r2][c2], jtbl[r1][c1]
+    jtbl
+end
 
 # swap job list based on penaly list
 function swapjob!(jlst::Array{Int,1},plst::Array{Int,1})
@@ -215,12 +248,12 @@ function orderjob!(jlst::Array{Int,1})
 end
 orderjob!(tbl::Array{Array{Int,1},1}) = orderjob!.(tbl)
 
-# shrink job table by skipping 0 column
-function shrinkjob!(tbl::Array{Array{Int,1},1})
+# shift job table by skipping 0 column
+function shiftjob!(tbl::Array{Array{Int,1},1})
     cols = validlength(tbl)
+    v = sum(tbl)
     for j in 1:cols
-        v = coltake(tbl,j)
-        if sum(v) == 0
+        if sum(v[j]) == 0
             for i in length(tbl)
                 tbl[i][j:end] = circshift(tbl[i][j:end],-1)
             end
@@ -228,10 +261,10 @@ function shrinkjob!(tbl::Array{Array{Int,1},1})
     end
 end
 
-# this has same effect as shrinkjob
+# this has same effect as shiftjob
 function colsortjob!(tbl::Array{Array{Int,1},1})
     col = length(tbl[1])
-    vs = [sum(coltake(tbl,i)) for i in 1:col]
+    vs = sum(tbl)
     ky = sortperm(vs, by = x->(x>0 ? x : Inf))
 
     for i in 1:length(tbl)
@@ -241,16 +274,7 @@ function colsortjob!(tbl::Array{Array{Int,1},1})
     # [vs,ky]
 end
 
-# do shift one
-function circshiftjob!(lst::Array{Int,1})
-    k = findfirst(x->(x>0), lst)
-    if k < validlength(lst)
-        lst[k:end] = circshift(lst[k:end],-1)
-    end
-end
-circshiftjob!(tbl::Array{Array{Int,1},1}) = circshiftjob!.(tbl)
-
-# condense all 
+# condense all by skipping 0 element
 function condensejob!(lst::Array{Int,1})
     v = lst[lst.>0]
     vm = length(v)
@@ -266,38 +290,39 @@ function condensejob!(lst::Array{Int,1})
 end
 condensejob!(tbl::Array{Array{Int,1},1}) = condensejob!.(tbl)
 
+# remove trailing zeros
 function clipjob(jlst::Array{Int,1})
     jlst[1:validlength(jlst)]
 end
 clipjob!(tbl::Array{Array{Int,1},1}) = clipjob!.(tbl)
 
-
 # ============================== crossover and mutation ==============================
 
 # crossover exchange rows of two genes at middle
-function crossover(jtbl1::Array{Array{Int,1},1}, jtbl2::Array{Array{Int,1},1})
-    c1 = deepcopy(jtbl1)
-    c2 = deepcopy(jtbl2)
-    if c1 != c2
-        rows = length(c1)
-        m = rows ÷ 2
-        c1 = vcat(c1[1:m],c2[m+1:end])
-        c2 = vcat(c2[1:m],c1[m+1:end])
-    end
-    return(c1,c2)
-end
+# function crossover(jtbl1::Array{Array{Int,1},1}, jtbl2::Array{Array{Int,1},1})
+#     c1 = deepcopy(jtbl1)
+#     c2 = deepcopy(jtbl2)
+#     if c1 != c2
+#         rows = length(c1)
+#         m = rows ÷ 2
+#         c1 = vcat(c1[1:m],c2[m+1:end])
+#         c2 = vcat(c2[1:m],c1[m+1:end])
+#     end
+#     return(c1,c2)
+# end
 
 # swap elements between valid index span and all
-function mutatejob!(jlst::Array{Int,1})
-    c1 = validlength(jlst)
-    c2 = length(jlst)
+# obsolete: use swapjob
+# function mutatejob!(jlst::Array{Int,1})
+#     c1 = validlength(jlst)
+#     c2 = length(jlst)
 
-    m1 = rand(1:c1)
-    m2 = rand(1:c2) # swap valid cell with all including zero
-    jlst[m1], jlst[m2] = jlst[m2], jlst[m1] 
-    return(jlst)
-end
-mutatejob!(tbl::Array{Array{Int,1},1}) = mutatejob!.(tbl)
+#     m1 = rand(1:c1)
+#     m2 = rand(1:c2) # swap valid cell with all including zero
+#     jlst[m1], jlst[m2] = jlst[m2], jlst[m1] 
+#     return(jlst)
+# end
+# mutatejob!(tbl::Array{Array{Int,1},1}) = mutatejob!.(tbl)
 
 # ============================== population ==============================
 
@@ -335,53 +360,37 @@ function survive!(pptbl::Array{Array{Array{Int,1},1},1}, survival = 0.8)
     pptbl
 end
 
-# fill up population using elite children and mutant genes
-function fillgeneration!(pptbl::Array{Array{Array{Int,1},1},1},n::Int,elite = 0.2, mutant = 0.05, jobswitch = false)
-    s = length(pptbl)
-    ss = n - s
-    
-    en = Int(floor(s*elite))
-    while ss > 0
-        i1 = rand(1:en)
-            # i2 = rand(1:en)
-        # do not cross, it colapses genes maybe.
-        # c1,c2 = crossover(pptbl[i1],pptbl[i2])
-        # make a copy of selected gene
-        c1 = deepcopy(pptbl[i1])
-        if rand() < mutant
-            if jobswitch
-                # defined in jobassign.jl
-                switchjob!(c1)
-                # switchjob!(c2)
-            end
-            # p = min(penalty(c1),penalty(c2))
-            p = penalty(c1)
-            if p > 0
-                swapjob!(c1)
-                # swapjob!(c2)
-            else
-                mutatejob!(c1)
-                # mutatejob!(c2)
-            end
-            # circshiftjob!(c1) # shift it one column
-            # circshiftjob!(c2)
+# new generation from parent (uni-sex generation)
+function childjob(tbl::Array{Array{Int,1},1}, mutant = 0.05, jobswitch = false)
+    # make a copy of selected gene
+    c1 = deepcopy(tbl)
+    if rand() < mutant
+        if jobswitch
+            switchjob!(c1)
+        else
+            swapjob!(c1) # change job for eachrow
         end
-        push!(pptbl,c1)#,c2)
-        ss -= 1
     end
+    c1
 end
 
 # evolution
 function evolution!(pptbl::Array{Array{Array{Int,1},1},1}, n::Int, nr=10, survival=0.8, elite=0.2, mutant=0.05, jobswitch = false)
     rep = Array{Array{Int,1},1}()
-    s = length(pptbl)
+    s0 = length(pptbl)
+
     for i in 1:n
         sortpopulation!(pptbl)
         survive!(pptbl,survival)
-        fillgeneration!(pptbl,s,elite, mutant)
-        shrinkjob!.(pptbl)
-        # orderjob!.(pptbl)
-        # colsortjob!.(pptbl)
+        
+        s = length(pptbl)
+        en = Int(round(elite*s))
+        for i in 1:(s0-s)
+            ic = rand(1:en)
+            c = childjob(pptbl[ic],elite, mutant)
+            shiftjob!(c)
+            push!(pptbl,c)
+        end
 
         v = penalty.(pptbl)
         dt = [minimum(v),Int(round(median(v))),maximum(v)]
@@ -390,7 +399,6 @@ function evolution!(pptbl::Array{Array{Array{Int,1},1},1}, n::Int, nr=10, surviv
             println("i:$i => $dt")
         end
         push!(rep,dt)
-#        pptbl = clipjoblength(pptbl,maximum(v))
     end
     rep
 end

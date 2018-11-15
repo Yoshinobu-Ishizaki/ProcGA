@@ -7,12 +7,12 @@ using StatsBase
 
 # assigntable = nothing
 
-function setassigntable(atbl,itbl,gtbl)
-    global assigntable = atbl
-    global intervaltable = itbl
-    global grouptable = gtbl # basically not used
-    return
-end
+# function setassigntable(atbl,itbl,gtbl)
+#     global assigntable = atbl
+#     global intervaltable = itbl
+#     global grouptable = gtbl # basically not used
+#     return
+# end
 
 function isassignable(x, lst)
     if x in lst
@@ -22,7 +22,7 @@ function isassignable(x, lst)
     end
 end
 
-function findassignnum(x,atbl = assigntable)
+function findassignnum(x,atbl)
     k = []
     for i in 1:length(atbl)
         if isassignable(x,atbl[i])
@@ -33,7 +33,7 @@ function findassignnum(x,atbl = assigntable)
 end
 
 # make correct assignment 
-function assignjob!(jtbl::Array{Array{Int,1},1},atbl = assigntable)
+function assignjob!(jtbl::Array{Array{Int,1},1},atbl)
     for i in 1:length(jtbl)
         for j in 1:length(jtbl[i])
             x = jtbl[i][j]
@@ -53,16 +53,8 @@ function assignjob!(jtbl::Array{Array{Int,1},1},atbl = assigntable)
     jtbl
 end
 
-# randomly switch column,row of elements if they are switchable.
-function switchjob!(jtbl::Array{Array{Int,1},1}, atbl = assigntable)
-    rw = length(jtbl)
-    col = validlength(jtbl)
+# penalty list for bad assignment
+function listbadassign(tbl::Array{Array{Int,1},1}, atbl)
     
-    r1 = rand(1:rw)
-    c1 = rand(1:col)
-    r2 = sample(findassignnum(r1,atbl),1)[1]
-    c2 = sample(1:col,1)[1]
-    jtbl[r1][c1],jtbl[r2][c2] = jtbl[r2][c2], jtbl[r1][c1]
-    jtbl
 end
 
