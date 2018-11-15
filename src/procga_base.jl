@@ -9,8 +9,8 @@ using Random
 using DataFrames
 
 # this must be overriden by user
-function penalty()
-    return(0)
+function listpenalty()
+    []
 end
 
 # taking column  
@@ -30,12 +30,23 @@ end
 # validation 
 # get valid length of job time table
 function validlength(lst::Array{Int,1})
-    findlast(x->(x>0),lst)
+    x = findlast(x->(x>0),lst)
+    if x == nothing
+        return 0
+    else
+        return x
+    end
 end
 
 function validlength(tbl::Array{Array{Int,1},1})
     v = validlength.(tbl)
     maximum(v)
+end
+
+# calculate all penalty adding its validlength 
+function penalty(tbl::Array{Array{Int,1},1})
+    ptbl = listpenalty(tbl)
+    sum(sum(ptbl)) + validlength(ptbl)
 end
 
 # ============================== penalty =================================
@@ -82,6 +93,7 @@ function listcoldup(tbl::Array{Array{Int,1},1})
     [x .* a for x in tbl]
 end
 
+
 # ==================== job table editing =============================
 
 # swap job list based on penaly list
@@ -93,6 +105,11 @@ function swapjob!(jlst::Array{Int,1},plst::Array{Int,1})
     end
 end
 swapjob!(tbl::Array{Array{Int,1},1},ptbl::Array{Array{Int,1},1}) = swapjob!.(tbl,ptbl)
+
+function swapjob!(tbl::Array{Array{Int,1},1})
+    ptbl = listpenalty(tbl)
+    swapjob!(tbl,ptbl)
+end
 
 # sort job table in order while keeping position of 0 entity
 function orderjob!(jlst::Array{Int,1})
@@ -157,6 +174,7 @@ end
 function mutatejob!(jlst::Array{Int,1})
     c1 = validlength(jlst)
     c2 = length(jlst)
+
     m1 = rand(1:c1)
     m2 = rand(1:c2) # swap valid cell with all including zero
     jlst[m1], jlst[m2] = jlst[m2], jlst[m1] 
@@ -220,10 +238,11 @@ function fillgeneration!(pptbl::Array{Array{Array{Int,1},1},1},n::Int,elite = 0.
                 # defined in jobassign.jl
                 switchjob!(c1)
                 switchjob!(c2)
-            else
-                mutatejob!.(c1)
-                mutatejob!.(c2)
             end
+            # mutatejob!.(c1)
+            # mutatejob!.(c2)
+            swapjob!(c1)
+            swapjob!(c2)
         end
         push!(pptbl,c1,c2)
         ss -= 2
@@ -243,7 +262,7 @@ function evolution!(pptbl::Array{Array{Array{Int,1},1},1}, n::Int, nr=10, surviv
         fillgeneration!(pptbl,s,elite, mutant)
         shrinkjob!.(pptbl)
         # orderjob!.(pptbl)
-        colsortjob!.(pptbl)
+        # colsortjob!.(pptbl)
 
         v = penalty.(pptbl)
         dt = [minimum(v),Int(round(median(v))),maximum(v)]
