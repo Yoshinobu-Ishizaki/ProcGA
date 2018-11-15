@@ -213,7 +213,7 @@ function listduplicate(jtbl::Array{Array{Int,1},1})
         cs = Set(cc)
         p[i] = (length(cc) - length(cs))
     end
-    p
+    [p for x in jtbl]
 end
 
 # You can give your own penalty function by overriding this.

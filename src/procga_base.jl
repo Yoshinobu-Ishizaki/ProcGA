@@ -44,9 +44,8 @@ function validlength(tbl::Array{Array{Int,1},1})
 end
 
 # calculate all penalty adding its validlength 
-function penalty(tbl::Array{Array{Int,1},1})
-    ptbl = listpenalty(tbl)
-    sum(sum(ptbl)) + validlength(tbl)
+function penalty()
+    return 0
 end
 
 # ============================== penalty =================================
@@ -104,8 +103,20 @@ function listhomogenious(tbl::Array{Array{Int,1},1})
         end
         v0 = v1
     end
+    [p for x in tbl] # return as table form
+end
+
+function listzero(lst::Array{Int,1})
+    l = validlength(lst)
+    p = zeros(Int,length(lst))
+    for i in 1:l
+        if lst[i] == 0
+            p[i] = 1
+        end
+    end
     p
 end
+listzero(tbl::Array{Array{Int,1},1}) = listzero.(tbl)
 
 function listusing(lst,id)
     [ x == id ? 1 : 0 for x in lst]
@@ -134,7 +145,7 @@ function listshortinterval(tbl::Array{Array{Int,1},1}, id::Int, lmt::Int)
             used = false
         end
     end
-    pl
+    [pl for x in tbl]
 end
 
 # uses default value
@@ -152,7 +163,7 @@ end
 function swapjob!(jlst::Array{Int,1},plst::Array{Int,1})
     pos = findmax(plst)[2]
     if pos > 0
-        p2 = rand(1:length(jlst))
+        p2 = rand(findall(x->x==0, plst)) # swap with zero penalty element
         jlst[pos],jlst[p2] = jlst[p2],jlst[pos]
     end
 end
@@ -201,6 +212,16 @@ function colsortjob!(tbl::Array{Array{Int,1},1})
     # [vs,ky]
 end
 
+# do shift one
+function circshiftjob!(lst::Array{Int,1})
+    k = findfirst(x->(x>0), lst)
+    if k < validlength(lst)
+        lst[k:end] = circshift(lst[k:end],-1)
+    end
+end
+circshiftjob!(tbl::Array{Array{Int,1},1}) = circshiftjob!.(tbl)
+
+# condense all 
 function condensejob!(lst::Array{Int,1})
     v = lst[lst.>0]
     vm = length(v)
@@ -314,6 +335,8 @@ function fillgeneration!(pptbl::Array{Array{Array{Int,1},1},1},n::Int,elite = 0.
                 mutatejob!(c1)
                 mutatejob!(c2)
             end
+            # circshiftjob!(c1) # shift it one column
+            # circshiftjob!(c2)
         end
         push!(pptbl,c1,c2)
         ss -= 2
