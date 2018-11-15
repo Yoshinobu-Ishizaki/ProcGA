@@ -5,12 +5,13 @@ job assignment related functions
 
 using StatsBase
 
-assigntable = nothing
+# assigntable = nothing
 
-function setassigntable(atbl)
+function setassigntable(atbl,itbl,gtbl)
     global assigntable = atbl
-    global grouptable = []
-    assigntable
+    global intervaltable = itbl
+    global grouptable = gtbl # basically not used
+    return
 end
 
 function isassignable(x, lst)

@@ -19,7 +19,7 @@ function coltake(lst::Array{Int,1},idx)
 end
 
 function coltake(tbl::Array{Array{Int,1},1},idx)
-    coltake.(tbl,idx)
+    [coltake(v,idx) for v in tbl]
 end
 
 # return list of sum of each column
@@ -46,7 +46,7 @@ end
 # calculate all penalty adding its validlength 
 function penalty(tbl::Array{Array{Int,1},1})
     ptbl = listpenalty(tbl)
-    sum(sum(ptbl)) + validlength(ptbl)
+    sum(sum(ptbl)) + validlength(tbl)
 end
 
 # ============================== penalty =================================
@@ -93,6 +93,58 @@ function listcoldup(tbl::Array{Array{Int,1},1})
     [x .* a for x in tbl]
 end
 
+# add penalty if each column is not same as preceeding one
+function listhomogenious(tbl::Array{Array{Int,1},1})
+    v0 = coltake(tbl,1)
+    p = zeros(Int,length(tbl[1]))
+    for i in 2:length(tbl[1])
+        v1 = coltake(tbl,i)
+        if (v1 != v0) & (Set(v1) == Set(v0))
+            p[i] = 1
+        end
+        v0 = v1
+    end
+    p
+end
+
+function listusing(lst,id)
+    [ x == id ? 1 : 0 for x in lst]
+end
+
+# check short interval between same work 
+function listshortinterval(tbl::Array{Array{Int,1},1}, id::Int, lmt::Int)
+    vn = listusing.(tbl,id)
+    v = colsumlist(vn)
+    pl = zeros(Int,length(tbl[1]))
+
+    used = false
+    cnt = 0
+    for i in 1:validlength(v)
+        if v[i] > 0
+            if !used 
+                pl[i] = cnt > 0 ? cnt : 0
+            end
+            used = true
+        else
+            if !used
+                cnt -=  1
+            else
+                cnt = lmt
+            end
+            used = false
+        end
+    end
+    pl
+end
+
+# uses default value
+function listshortinterval(tbl::Array{Array{Int,1},1}, lmt = intervaltable)
+    pl = listshortinterval(tbl,1,lmt[1])
+    for i in 2:length(lmt)
+        pl .+= listshortinterval(tbl,i,lmt[i])
+    end
+    pl
+end
 
 # ==================== job table editing =============================
 
@@ -148,6 +200,21 @@ function colsortjob!(tbl::Array{Array{Int,1},1})
     tbl
     # [vs,ky]
 end
+
+function condensejob!(lst::Array{Int,1})
+    v = lst[lst.>0]
+    vm = length(v)
+
+    for i in 1:length(lst)
+        if i > vm
+            lst[i] = 0
+        else
+            lst[i] = v[i]
+        end
+    end
+    lst
+end
+condensejob!(tbl::Array{Array{Int,1},1}) = condensejob!.(tbl)
 
 function clipjob(jlst::Array{Int,1})
     jlst[1:validlength(jlst)]
@@ -239,10 +306,14 @@ function fillgeneration!(pptbl::Array{Array{Array{Int,1},1},1},n::Int,elite = 0.
                 switchjob!(c1)
                 switchjob!(c2)
             end
-            # mutatejob!.(c1)
-            # mutatejob!.(c2)
-            swapjob!(c1)
-            swapjob!(c2)
+            p = min(penalty(c1),penalty(c2))
+            if p > 0
+                swapjob!(c1)
+                swapjob!(c2)
+            else
+                mutatejob!(c1)
+                mutatejob!(c2)
+            end
         end
         push!(pptbl,c1,c2)
         ss -= 2
