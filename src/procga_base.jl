@@ -8,10 +8,16 @@ using LinearAlgebra, Statistics
 using Random
 using DataFrames
 
-# this must be overriden by user
+# abstract function ==========================
+# these must be overriden by user
 function listpenalty()
     []
 end
+# calculate all penalty adding its validlength 
+function penalty()
+    return 0
+end
+# ============================================
 
 # taking column  
 function coltake(lst::Array{Int,1},idx)
@@ -43,42 +49,38 @@ function validlength(tbl::Array{Array{Int,1},1})
     maximum(v)
 end
 
-# calculate all penalty adding its validlength 
-function penalty()
-    return 0
-end
 
 # ============================== penalty =================================
 
 # consequtive use limit 
 # if id continues more than lmt, give penalty
-function listcontinuity(lst::Array{Int,1},id,lmt)
-    ln = length(lst)
-    p = zeros(Int,ln)
-    chk = [(x == id ? 1 : 0) for x in lst]
+# function listcontinuity(lst::Array{Int,1},id,lmt)
+#     ln = length(lst)
+#     p = zeros(Int,ln)
+#     chk = [(x == id ? 1 : 0) for x in lst]
     
-    cnt = 0
-    x0 = 0
-    for i in 1:ln
-        x = chk[i]
-        if x > 0
-            cnt += 1
-            p[i] = cnt
-        else
-            cnt = 0
-        end
-    end
+#     cnt = 0
+#     x0 = 0
+#     for i in 1:ln
+#         x = chk[i]
+#         if x > 0
+#             cnt += 1
+#             p[i] = cnt
+#         else
+#             cnt = 0
+#         end
+#     end
     
-    [ x > lmt ? (x-lmt) : 0 for x in p]
-end
+#     [ x > lmt ? (x-lmt) : 0 for x in p]
+# end
 
-function listcontinuity(tbl::Array{Array{Int,1},1},id,lmt)
-    [listcontinuity(lst,id,lmt) for lst in tbl] 
-end   
+# function listcontinuity(tbl::Array{Array{Int,1},1},id,lmt)
+#     [listcontinuity(lst,id,lmt) for lst in tbl] 
+# end   
 
-function listcontinuity(tbl::Array{Array{Int,1},1}, lmt::Array{Int,1})
-    sum([listcontinuity(tbl,i,lmt[i]) for i in 1:length(lmt)])
-end
+# function listcontinuity(tbl::Array{Array{Int,1},1}, lmt::Array{Int,1})
+#     sum([listcontinuity(tbl,i,lmt[i]) for i in 1:length(lmt)])
+# end
 
 function listcoldup(tbl::Array{Array{Int,1},1})
     a = Array{Int,1}()
@@ -120,6 +122,33 @@ listzero(tbl::Array{Array{Int,1},1}) = listzero.(tbl)
 
 function listusing(lst,id)
     [ x == id ? 1 : 0 for x in lst]
+end
+
+# check overuse of same job overall
+function listoveruse(tbl::Array{Array{Int,1},1}, id::Int, lmt::Int)
+    vn = listusing.(tbl,id)
+    v = colsumlist(vn)
+    pl = zeros(Int,length(tbl[1]))
+
+    used = false
+    cnt = 0
+    for i in 1:validlength(v)
+        if v[i] > 0
+            if used 
+                cnt += 1
+            else
+                used = true
+                cnt = 1
+            end
+            pl[i] = cnt > lmt ? (cnt-lmt) : 0
+        else
+            if used
+                used = false
+                cnt = 0
+            end
+        end
+    end
+    [pl .* x for x in vn]
 end
 
 # check short interval between same work 
@@ -313,36 +342,32 @@ function fillgeneration!(pptbl::Array{Array{Array{Int,1},1},1},n::Int,elite = 0.
     
     en = Int(floor(s*elite))
     while ss > 0
-        if rand() < elite
-            i1 = rand(1:en)
-            i2 = rand(1:en)
-        else
-            i1 = rand(1:s)
-            i2 = rand(1:s)
-        end
-        c1,c2 = crossover(pptbl[i1],pptbl[i2])
+        i1 = rand(1:en)
+            # i2 = rand(1:en)
+        # do not cross, it colapses genes maybe.
+        # c1,c2 = crossover(pptbl[i1],pptbl[i2])
+        # make a copy of selected gene
+        c1 = deepcopy(pptbl[i1])
         if rand() < mutant
             if jobswitch
                 # defined in jobassign.jl
                 switchjob!(c1)
-                switchjob!(c2)
+                # switchjob!(c2)
             end
-            p = min(penalty(c1),penalty(c2))
+            # p = min(penalty(c1),penalty(c2))
+            p = penalty(c1)
             if p > 0
                 swapjob!(c1)
-                swapjob!(c2)
+                # swapjob!(c2)
             else
                 mutatejob!(c1)
-                mutatejob!(c2)
+                # mutatejob!(c2)
             end
             # circshiftjob!(c1) # shift it one column
             # circshiftjob!(c2)
         end
-        push!(pptbl,c1,c2)
-        ss -= 2
-    end
-    while length(pptbl) > n
-        pop!(pptbl)
+        push!(pptbl,c1)#,c2)
+        ss -= 1
     end
 end
 
