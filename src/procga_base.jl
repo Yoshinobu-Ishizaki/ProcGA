@@ -29,10 +29,10 @@ function coltake(tbl::DVector{Int},idx)
 end
 
 # return list of sum of each column
-function colsumlist(tbl::DVector{Int})
-    # [sum(coltake(tbl,i)) for i in 1:length(tbl[1])]
-    sum(tbl) # this returns list 
-end
+# function colsumlist(tbl::DVector{Int})
+#     # [sum(coltake(tbl,i)) for i in 1:length(tbl[1])]
+#     sum(tbl) # this returns list 
+# end
 
 # validation 
 # get valid length of job time table
@@ -105,7 +105,7 @@ function listcoldup(tbl::DVector{Int})
 end
 
 # add penalty if each column is not same as preceeding one
-function listhomogenious(tbl::DVector{Int})
+function listinhomogeneous(tbl::DVector{Int})
     v0 = coltake(tbl,1)
     p = zeros(Int,length(tbl[1]))
     for i in 2:length(tbl[1])
@@ -137,7 +137,7 @@ end
 # check overuse of same job overall
 function listoveruse(tbl::DVector{Int}, id::Int, lmt::Int)
     vn = listusing.(tbl,id)
-    v = colsumlist(vn)
+    v = sum(vn)
     pl = zeros(Int,length(tbl[1]))
 
     used = false
@@ -172,7 +172,7 @@ end
 # check short interval between same work 
 function listshortinterval(tbl::DVector{Int}, id::Int, lmt::Int)
     vn = listusing.(tbl,id)
-    v = colsumlist(vn)
+    v = sum(vn)
     pl = zeros(Int,length(tbl[1]))
 
     used = false
@@ -187,12 +187,12 @@ function listshortinterval(tbl::DVector{Int}, id::Int, lmt::Int)
             if !used
                 cnt -=  1
             else
-                cnt = lmt
+                cnt = lmt-1
             end
             used = false
         end
     end
-    [pl for x in tbl]
+    [pl .* x for x in vn]
 end
 
 # uses default value
@@ -207,37 +207,36 @@ end
 # ==================== job table editing =============================
 
 # randomly switch column,row of elements based on penalty list
-function switchjob!(jtbl::DVector{Int},plst::DVector{Int})
+function swapjob!(jtbl::DVector{Int})
     rw = length(jtbl)
     col = validlength(jtbl)
+    plst = listpenalty(jtbl)
     
-    c1 = maximum((x->x[2]).(findmax.(plst)))
-    r1 = rand(1:rw)
+    c1,r1 = findmax((x->x[2]).(findmax.(plst))) # col, row of maximum
 
-    c2 = rand(1:col)
+    zeropos = findall.(x->x==0, plst)
     r2 = rand(1:rw)
+    c2 = rand(zeropos[r2])
     
     jtbl[r1][c1],jtbl[r2][c2] = jtbl[r2][c2], jtbl[r1][c1]
     jtbl
 end
 
 # swap job list based on penaly list
-function swapjob!(jlst::Vector{Int},plst::Vector{Int})
+function swapjobrow!(jlst::Vector{Int},plst::Vector{Int})
     pos = findmax(plst)[2]
     if pos > 0
         p2 = rand(findall(x->x==0, plst)) # swap with zero penalty element
         jlst[pos],jlst[p2] = jlst[p2],jlst[pos]
     end
 end
-swapjob!(tbl::DVector{Int},ptbl::DVector{Int}) = swapjob!.(tbl,ptbl)
-
-function swapjob!(tbl::DVector{Int})
+function swapjobrow!(tbl::DVector{Int})
     ptbl = listpenalty(tbl)
-    swapjob!(tbl,ptbl)
+    swapjobrow!.(tbl,ptbl)
 end
 
 # sort job table in order while keeping position of 0 entity
-function orderjob!(jlst::Vector{Int})
+function sortjob!(jlst::Vector{Int})
     st = sort(jlst[jlst.>0]) # sorted value
     pos = range(1,stop=length(jlst))[jlst.>0] # index of non zero
 
@@ -246,10 +245,10 @@ function orderjob!(jlst::Vector{Int})
     end
     jlst
 end
-orderjob!(tbl::DVector{Int}) = orderjob!.(tbl)
+sortjob!(tbl::DVector{Int}) = sortjob!.(tbl)
 
 # shift job table by skipping 0 column
-function shiftjob!(tbl::DVector{Int})
+function skipzerocol!(tbl::DVector{Int})
     cols = validlength(tbl)
     v = sum(tbl)
     for j in 1:cols
@@ -261,8 +260,8 @@ function shiftjob!(tbl::DVector{Int})
     end
 end
 
-# this has same effect as shiftjob
-function colsortjob!(tbl::DVector{Int})
+# this has same effect as skipzerocol
+function sortjobcol!(tbl::DVector{Int})
     col = length(tbl[1])
     vs = sum(tbl)
     ky = sortperm(vs, by = x->(x>0 ? x : Inf))
@@ -291,10 +290,14 @@ end
 condensejob!(tbl::DVector{Int}) = condensejob!.(tbl)
 
 # remove trailing zeros
-function clipjob(jlst::Vector{Int})
-    jlst[1:validlength(jlst)]
+function clipjob(jlst::Vector{Int},n)
+    jlst[1:n]
 end
-clipjob!(tbl::DVector{Int}) = clipjob!.(tbl)
+function clipjob(jlst::Vector{Int})
+    clipjob(jlst,validlength(jlst))
+end
+clipjob(tbl::DVector{Int},n) = clipjob.(tbl, n)
+clipjob(tbl::DVector{Int}) = clipjob.(tbl)
 
 # ============================== crossover and mutation ==============================
 
@@ -341,7 +344,7 @@ function populatefrom(jlst::DVector{Int},n::Int)
     popu = [deepcopy(jlst)]
     for i in 2:n
         jt = deepcopy(jlst)
-        mutatejob!.(jt)
+        swapjobrow!(jt)
         push!(popu, jt)
     end    
     popu
@@ -366,9 +369,9 @@ function childjob(tbl::DVector{Int}, mutant = 0.05, jobswitch = false)
     c1 = deepcopy(tbl)
     if rand() < mutant
         if jobswitch
-            switchjob!(c1)
+            swapjob!(c1)
         else
-            swapjob!(c1) # change job for eachrow
+            swapjobrow!(c1) # change job for eachrow
         end
     end
     c1
@@ -387,8 +390,8 @@ function evolution!(pptbl::Array{DVector{Int},1}, n::Int, nr=10, survival=0.8, e
         en = Int(round(elite*s))
         for i in 1:(s0-s)
             ic = rand(1:en)
-            c = childjob(pptbl[ic],elite, mutant)
-            shiftjob!(c)
+            c = childjob(pptbl[ic],mutant,jobswitch)
+            skipzerocol!(c)
             push!(pptbl,c)
         end
 

@@ -33,7 +33,7 @@ function findassignnum(x,atbl)
 end
 
 # make correct assignment 
-function assignjob!(jtbl::Array{Array{Int,1},1},atbl)
+function assignjob!(jtbl::DVector{Int},atbl)
     for i in 1:length(jtbl)
         for j in 1:length(jtbl[i])
             x = jtbl[i][j]
@@ -54,7 +54,11 @@ function assignjob!(jtbl::Array{Array{Int,1},1},atbl)
 end
 
 # penalty list for bad assignment
-function listbadassign(tbl::Array{Array{Int,1},1}, atbl)
-    
+function listbadassign(jlst::Vector{Int}, alst::Vector{Int})
+    st = vcat(alst,0)
+    [(x in st) ? 0 : 1 for x in jlst]
+end
+function listbadassign(tbl::DVector{Int}, atbl::DVector{Int})
+    [listbadassign(t,a) for (t,a) in zip(tbl,atbl)]
 end
 
