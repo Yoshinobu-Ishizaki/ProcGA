@@ -13,7 +13,7 @@ using DataFrames
 function listpenalty()
     []
 end
-# calculate all penalty adding its validlength 
+# calcutblate all penalty adding its validlength 
 function penalty()
     return 0
 end
@@ -34,6 +34,10 @@ end
 #     sum(tbl) # this returns list 
 # end
 
+function zerotbl(tbl::DVector{Int})
+    [ zeros(Int,length(tbl[1])) for x in tbl ]
+end
+
 # validation 
 # get valid length of job time table
 function validlength(lst::Vector{Int})
@@ -50,42 +54,47 @@ function validlength(tbl::DVector{Int})
     maximum(v)
 end
 
+function listusing(lst,id)
+    [ x == id ? 1 : 0 for x in lst]
+end
 
 # ============================== penalty =================================
 
-# consequtive use limit 
-# if id continues more than lmt, give penalty
-# function listcontinuity(lst::Vector{Int},id,lmt)
-#     ln = length(lst)
-#     p = zeros(Int,ln)
-#     chk = [(x == id ? 1 : 0) for x in lst]
+# job switching between assignment
+function listjobswitch(tbl::DVector{Int},id::Int)
+    utbl = listusing.(tbl,id)
+    p = zerotbl(utbl)
     
-#     cnt = 0
-#     x0 = 0
-#     for i in 1:ln
-#         x = chk[i]
-#         if x > 0
-#             cnt += 1
-#             p[i] = cnt
-#         else
-#             cnt = 0
-#         end
-#     end
-    
-#     [ x > lmt ? (x-lmt) : 0 for x in p]
-# end
+    v1 = coltake(utbl,1)
+    for i in 2:length(utbl[1])
+        v = coltake(utbl,i)
+        if (sum(v)>0) & (sum(v1)>0) & (v != v1)
+            cc = findall(x->x>0, v)
+            for x in cc
+                p[x][i] = 1
+            end
+        end
+        v1 = v
+    end
+    p
+end
+function listjobswitch(tbl::DVector{Int})
+    # take unique non-zero elements
+    xx = Int[]
+    [append!(xx,unique(x)) for x in tbl]
+    sort!(unique!(xx))
+    el = xx[xx.>0]
 
-# function listcontinuity(tbl::DVector{Int},id,lmt)
-#     [listcontinuity(lst,id,lmt) for lst in tbl] 
-# end   
-
-# function listcontinuity(tbl::DVector{Int}, lmt::Vector{Int})
-#     sum([listcontinuity(tbl,i,lmt[i]) for i in 1:length(lmt)])
-# end
+    p = zerotbl(tbl)
+    for e in el
+        p .+= listjobswitch(tbl,e)
+    end
+    p
+end
 
 function listcoldup(tbl::DVector{Int})
     n = length(tbl)
-    pp = [ zeros(Int,length(tbl[1])) for x in tbl]
+    pp = zerotbl(tbl)
 
     for i in 1:length(tbl[1])
         p = zeros(Int,length(tbl))
@@ -129,10 +138,6 @@ function listzero(lst::Vector{Int})
     p
 end
 listzero(tbl::DVector{Int}) = listzero.(tbl)
-
-function listusing(lst,id)
-    [ x == id ? 1 : 0 for x in lst]
-end
 
 # check overuse of same job overall
 function listoveruse(tbl::DVector{Int}, id::Int, lmt::Int)
@@ -195,7 +200,7 @@ function listshortinterval(tbl::DVector{Int}, id::Int, lmt::Int)
     [pl .* x for x in vn]
 end
 
-# uses default value
+# uses defautblt value
 function listshortinterval(tbl::DVector{Int}, lmt::Vector{Int})
     pl = listshortinterval(tbl,1,lmt[1])
     for i in 2:length(lmt)
@@ -327,9 +332,9 @@ clipjob(tbl::DVector{Int}) = clipjob.(tbl)
 # end
 # mutatejob!(tbl::DVector{Int}) = mutatejob!.(tbl)
 
-# ============================== population ==============================
+# ============================== poputblation ==============================
 
-function populateshuffle(tbl::DVector{Int},n::Int)
+function poputblateshuffle(tbl::DVector{Int},n::Int)
     popu = [deepcopy(tbl)]
     for i in 2:n
         jt = deepcopy(tbl)
@@ -339,8 +344,8 @@ function populateshuffle(tbl::DVector{Int},n::Int)
     popu
 end
 
-# create initial population of size n from source data
-function populatefrom(jlst::DVector{Int},n::Int)
+# create initial poputblation of size n from source data
+function poputblatefrom(jlst::DVector{Int},n::Int)
     popu = [deepcopy(jlst)]
     for i in 2:n
         jt = deepcopy(jlst)
@@ -350,7 +355,7 @@ function populatefrom(jlst::DVector{Int},n::Int)
     popu
 end
 
-# sort population table by its valid length
+# sort poputblation table by its valid length
 function sortpopulation!(pptbl::Array{DVector{Int},1})
     sort!(pptbl, by = x->penalty(x))
 end
@@ -378,7 +383,7 @@ function childjob(tbl::DVector{Int}, mutant = 0.05, jobswitch = false)
 end
 
 # evolution
-function evolution!(pptbl::Array{DVector{Int},1}, n::Int, nr=10, survival=0.8, elite=0.2, mutant=0.05, jobswitch = false)
+function evolution!(pptbl::Array{DVector{Int},1}, n::Int, nr=10, survival=0.8, elite=0.2, mutant=0.05, jobswitch = false; stopat = 0)
     rep = DVector{Int}()
     s0 = length(pptbl)
 
@@ -402,6 +407,10 @@ function evolution!(pptbl::Array{DVector{Int},1}, n::Int, nr=10, survival=0.8, e
             println("i:$i => $dt")
         end
         push!(rep,dt)
+
+        if minimum(v) <= stopat
+            break
+        end
     end
     rep
 end
