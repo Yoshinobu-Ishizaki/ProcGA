@@ -19,6 +19,15 @@ function penalty()
 end
 # ============================================
 
+function nzminimum(lst::Vector{Int})::Int
+    l = lst[lst.>0]
+    if length(l) > 0
+        minimum(l)
+    else
+        zero(Int)
+    end
+end
+
 # taking column  
 function coltake(lst::Vector{Int},idx)
     lst[idx]
@@ -127,15 +136,26 @@ function listinhomogeneous(tbl::DVector{Int})
     [p for x in tbl] # return as table form
 end
 
-function listzero(lst::Vector{Int})
-    l = validlength(lst)
+function listzero(lst::Vector{Int},n::Int)
     p = zeros(Int,length(lst))
+    if n < 0 
+        l = length(lst)
+    else
+        l = n
+    end 
     for i in 1:l
         if lst[i] == 0
             p[i] = 1
         end
     end
     p
+end
+function listzero(lst::Vector{Int})
+    l = validlength(lst)
+    listzero(lst,l)
+end
+function listzero(tbl::DVector{Int}, n::Int)
+    [ listzero(lst,n) for lst in tbl]
 end
 listzero(tbl::DVector{Int}) = listzero.(tbl)
 
@@ -209,7 +229,105 @@ function listshortinterval(tbl::DVector{Int}, lmt::Vector{Int})
     pl
 end
 
+# returns 1 if item is in grp
+function listgroupable(lst::Vector{Int}, grp::Vector{Int})
+    p = [ (x in grp) ? 1 : 0 for x in lst]   
+end
+function listgroupable(tbl::DVector{Int}, grp::Vector{Int})
+    p = [ listgroupable(lst,grp) for lst in tbl ]
+end
+function listgroupable(tbl::DVector{Int}, gtbl::DVector{Int})
+    p = zerotbl(tbl)
+    for g in gtbl
+        p .+= listgroupable(tbl,g)
+    end
+    p
+end
+
+# filter groupable items only
+function listgroupableitems(tbl::DVector{Int}, grp::DVector{Int})
+    gg = listgroupable(tbl,grp)
+    [ t .* g for (t,g) in zip(tbl,gg )]
+end
+
+# filter out groupable
+function listnongroupableitems(tbl::DVector{Int},grp::DVector{Int})
+    gg = listgroupable(tbl,grp)
+    gn = listzero(gg,-1)
+    [ t .* g for (t,g) in zip(tbl,gn )]
+end
+
+# sequencial order
+function listbadsequence(lst::Vector{Int})
+    p = zeros(Int,length(lst))
+    for i in 1:(length(lst)-1)
+        m = nzminimum(lst[(i+1):end])
+        if (lst[i] > 0) & (lst[i] > m)
+            p[i] = m > 0 ? lst[i] - m : 0
+        end
+    end
+    p
+end
+function listbadsequence(tbl::DVector{Int})
+    listbadsequence.(tbl)
+end
+
+# penalty for bad grouping.
+# if element is appear less than n (for each group) or more than n give penalty as its difference.
+function listbadgroup(tbl::DVector{Int},grp::Vector{Int}, n::Int)
+    nn = min(n,length(tbl))
+
+    gg = listgroupable(tbl,grp)
+    gl = sum(gg) # column sum
+    pl = [ x == 0 ? 0 : abs(x-nn) for x in gl ]
+    [ g .* pl for g in gg]
+end
+function listbadgroup(tbl::DVector{Int},grp::DVector{Int}, n::Vector{Int})
+    p = zerotbl(tbl)
+    for i in 1:length(n)
+        p .+= listbadgroup(tbl,grp[i],n[i])
+    end
+    p
+end
+
+# if jobs are located sparce it is not good
+function listlaziness(lst::Vector{Int})
+    p = zeros(Int,length(lst))
+    
+    # simply give 1 to zero element between first and last non-zero elemant
+    i1 = findfirst(x->x>0, lst)
+    i2 = findlast(x->x>0, lst)
+    for i in i1:i2
+        p[i] = (lst[i] > 0) ? 0 : 1
+    end
+    
+    # also give penalty to such that 7,0,7,7 
+    xl0 = unique(lst)
+    xl = xl0[xl0.>0] 
+    for x in xl
+        id = (1:length(lst))[lst.==x]
+        sort!(id)
+        i0 = id[1]
+        for i in 2:length(id)
+            i1 = id[i]
+            p[i1] = (i1 - i0) > 1 ? (i1-i0-1) : 0
+            i1 = i0
+        end
+    end
+    p
+end
+function listlaziness(tbl::DVector{Int})
+    listlaziness.(tbl)
+end
+
 # ==================== job table editing =============================
+
+# enlarge job length and rotate last item
+function addjobcol!(tbl::DVector{Int}, n::Int)
+    t = [append!(x, zeros(Int,n)) for x in tbl]   
+    t[end] = circshift(t[end],n)
+    t
+end
 
 # randomly switch column,row of elements based on penalty list
 function swapjob!(jtbl::DVector{Int})
@@ -231,9 +349,15 @@ end
 function swapjobrow!(jlst::Vector{Int},plst::Vector{Int})
     pos = findmax(plst)[2]
     if pos > 0
-        p2 = rand(findall(x->x==0, plst)) # swap with zero penalty element
+        pos2 = findall(x->x==0, plst)
+        if length(pos2) > 0
+            p2 = rand(pos2) # swap with zero penalty element
+        else
+            p2 = rand(1:length(jlst))
+        end
         jlst[pos],jlst[p2] = jlst[p2],jlst[pos]
     end
+    jlst
 end
 function swapjobrow!(tbl::DVector{Int})
     ptbl = listpenalty(tbl)
@@ -252,20 +376,7 @@ function sortjob!(jlst::Vector{Int})
 end
 sortjob!(tbl::DVector{Int}) = sortjob!.(tbl)
 
-# shift job table by skipping 0 column
-function skipzerocol!(tbl::DVector{Int})
-    cols = validlength(tbl)
-    v = sum(tbl)
-    for j in 1:cols
-        if sum(v[j]) == 0
-            for i in length(tbl)
-                tbl[i][j:end] = circshift(tbl[i][j:end],-1)
-            end
-        end
-    end
-end
-
-# this has same effect as skipzerocol
+# move zero column to end
 function sortjobcol!(tbl::DVector{Int})
     col = length(tbl[1])
     vs = sum(tbl)
@@ -302,22 +413,25 @@ function clipjob(jlst::Vector{Int})
     clipjob(jlst,validlength(jlst))
 end
 clipjob(tbl::DVector{Int},n) = clipjob.(tbl, n)
-clipjob(tbl::DVector{Int}) = clipjob.(tbl)
+clipjob(tbl::DVector{Int}) = clipjob.(tbl, validlength(tbl))
+function clipjob!(tbl::DVector{Int},n)
+    tbl = clipjob(tbl,n)
+end
 
 # ============================== crossover and mutation ==============================
 
 # crossover exchange rows of two genes at middle
-# function crossover(jtbl1::DVector{Int}, jtbl2::DVector{Int})
-#     c1 = deepcopy(jtbl1)
-#     c2 = deepcopy(jtbl2)
-#     if c1 != c2
-#         rows = length(c1)
-#         m = rows ÷ 2
-#         c1 = vcat(c1[1:m],c2[m+1:end])
-#         c2 = vcat(c2[1:m],c1[m+1:end])
-#     end
-#     return(c1,c2)
-# end
+function crossover(jtbl1::DVector{Int}, jtbl2::DVector{Int})
+    c1 = deepcopy(jtbl1)
+    c2 = deepcopy(jtbl2)
+    if c1 != c2
+        rows = length(c1)
+        m = rows ÷ 2
+        c1 = vcat(c1[1:m],c2[m+1:end])
+        c2 = vcat(c2[1:m],c1[m+1:end])
+    end
+    return(c1,c2)
+end
 
 # swap elements between valid index span and all
 # obsolete: use swapjob
@@ -334,7 +448,7 @@ clipjob(tbl::DVector{Int}) = clipjob.(tbl)
 
 # ============================== poputblation ==============================
 
-function poputblateshuffle(tbl::DVector{Int},n::Int)
+function populateshuffle(tbl::DVector{Int},n::Int)
     popu = [deepcopy(tbl)]
     for i in 2:n
         jt = deepcopy(tbl)
@@ -345,13 +459,14 @@ function poputblateshuffle(tbl::DVector{Int},n::Int)
 end
 
 # create initial poputblation of size n from source data
-function poputblatefrom(jlst::DVector{Int},n::Int)
-    popu = [deepcopy(jlst)]
+function populatefrom(jlst::DVector{Int},n::Int)
+    jt = deepcopy(jlst)
+    popu = [jt]
     for i in 2:n
-        jt = deepcopy(jlst)
+        jt = deepcopy(jt)
         swapjobrow!(jt)
         push!(popu, jt)
-    end    
+    end
     popu
 end
 
@@ -383,35 +498,55 @@ function childjob(tbl::DVector{Int}, mutant = 0.05, jobswitch = false)
 end
 
 # evolution
+
+function evoluteone!(pptbl::Array{DVector{Int},1}, survival=0.8, elite=0.2, mutant=0.05, jobswitch = false; stopat = 0)
+    s0 = length(pptbl)
+    sortpopulation!(pptbl)
+    survive!(pptbl,survival)
+    s = length(pptbl)
+    en = Int(round(elite*s))
+    for i in 1:(s0-s)
+        ic = rand(1:en)
+        c = childjob(pptbl[ic],mutant,jobswitch)
+        sortjobcol!(c)
+        push!(pptbl,c)
+    end
+    v = penalty.(pptbl)
+    [minimum(v),Int(round(median(v))),maximum(v)]
+end
+
 function evolution!(pptbl::Array{DVector{Int},1}, n::Int, nr=10, survival=0.8, elite=0.2, mutant=0.05, jobswitch = false; stopat = 0)
     rep = DVector{Int}()
-    s0 = length(pptbl)
 
     for i in 1:n
-        sortpopulation!(pptbl)
-        survive!(pptbl,survival)
-        
-        s = length(pptbl)
-        en = Int(round(elite*s))
-        for i in 1:(s0-s)
-            ic = rand(1:en)
-            c = childjob(pptbl[ic],mutant,jobswitch)
-            skipzerocol!(c)
-            push!(pptbl,c)
-        end
+        dt = evoluteone!(pptbl,survival,elite,mutant, jobswitch)
+        push!(rep,dt)
 
-        v = penalty.(pptbl)
-        dt = [minimum(v),Int(round(median(v))),maximum(v)]
-        
         if i % nr == 0
             println("i:$i => $dt")
         end
-        push!(rep,dt)
-
-        if minimum(v) <= stopat
+        if dt[1] <= stopat
             break
         end
     end
     rep
 end
 
+function sortevolution!(pptbl::Array{DVector{Int},1}, n::Int, nr=10, survival=0.8, elite=0.2, mutant=0.05, jobswitch = false; stopat = 0)
+    rep = DVector{Int}()
+
+    for i in 1:n
+        sortjob!.(pptbl)
+
+        dt = evoluteone!(pptbl,survival,elite,mutant, jobswitch)
+        push!(rep,dt)
+
+        if i % nr == 0
+            println("i:$i => $dt")
+        end
+        if dt[1] <= stopat
+            break
+        end
+    end
+    rep
+end
