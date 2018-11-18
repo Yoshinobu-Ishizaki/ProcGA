@@ -56,7 +56,7 @@ function evolutecross!(pptbl::Array{DVector{Int},1}, survival=0.8, elite=0.2, mu
 
     k = (s0-s)
     while k > 0
-        if rand() < mutant
+        if rand() < elite
             i1 = rand(1:en)
             i2 = rand(1:en)
         else
